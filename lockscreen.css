@@ -1,0 +1,434 @@
+/*
+ * Ila Salaty — Lock Screen Styles
+ *
+ * A reverent, purposeful design rooted in Islamic geometric aesthetics.
+ * No gratuitous gradients or decorative flourishes — every element
+ * serves the singular goal: remind the user it is time to pray.
+ *
+ * Color palette: deep navy (#1a1a2e) → teal-gold accents
+ * Typography: system Arabic stack + system sans-serif
+ */
+
+/* ─── Reset & Base ───────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Lock Screen Container ──────────────────────────────────────── */
+
+.lockscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ─── Geometric Pattern Background ───────────────────────────────── */
+
+.geometric-pattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  background-image:
+    /* Islamic star pattern — subtle tessellation */
+    repeating-conic-gradient(
+      from 0deg at 50% 50%,
+      transparent 0deg 30deg,
+      rgba(200, 170, 110, 0.5) 30deg 33deg,
+      transparent 33deg 60deg
+    );
+  background-size: 80px 80px;
+  pointer-events: none;
+}
+
+.geometric-pattern::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    rgba(26, 26, 46, 0.6) 70%,
+    rgba(26, 26, 46, 0.95) 100%
+  );
+}
+
+/* ─── Main Content ───────────────────────────────────────────────── */
+
+.lockscreen-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  max-width: 560px;
+  width: 90%;
+  padding: 32px 24px;
+  animation: contentFadeIn 1s ease-out;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Bismillah Header ───────────────────────────────────────────── */
+
+.calligraphy-header {
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.bismillah {
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', 'Noto Naskh Arabic', serif;
+  font-size: 1.3rem;
+  color: rgba(200, 170, 110, 0.7);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Mosque Icon ────────────────────────────────────────────────── */
+
+.mosque-icon {
+  width: 100px;
+  height: 84px;
+  color: rgba(200, 170, 110, 0.6);
+  animation: gentlePulse 4s ease-in-out infinite;
+}
+
+@keyframes gentlePulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+
+/* ─── Prayer Name ────────────────────────────────────────────────── */
+
+.prayer-name-section {
+  text-align: center;
+}
+
+.prayer-name-ar {
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', 'Noto Naskh Arabic', serif;
+  font-size: 3.2rem;
+  font-weight: 700;
+  color: #e8e0d0;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.prayer-name-en {
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: rgba(200, 170, 110, 0.8);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ─── Message Section ────────────────────────────────────────────── */
+
+.message-section {
+  text-align: center;
+}
+
+.main-message {
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', 'Noto Naskh Arabic', serif;
+  font-size: 2rem;
+  color: #ffffff;
+  margin-bottom: 8px;
+  animation: messageGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes messageGlow {
+  from { text-shadow: 0 0 20px rgba(200, 170, 110, 0.0); }
+  to   { text-shadow: 0 0 30px rgba(200, 170, 110, 0.2); }
+}
+
+.sub-message {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.5;
+  direction: ltr;
+}
+
+/* ─── Quran Verse ────────────────────────────────────────────────── */
+
+.verse-section {
+  text-align: center;
+  padding: 20px 28px;
+  border-top: 1px solid rgba(200, 170, 110, 0.12);
+  border-bottom: 1px solid rgba(200, 170, 110, 0.12);
+  max-width: 480px;
+}
+
+.verse-arabic {
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', 'Noto Naskh Arabic', serif;
+  font-size: 1.35rem;
+  color: rgba(200, 170, 110, 0.85);
+  line-height: 2;
+  margin-bottom: 8px;
+}
+
+.verse-translation {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+  line-height: 1.5;
+  direction: ltr;
+  margin-bottom: 4px;
+}
+
+.verse-reference {
+  font-size: 0.75rem;
+  color: rgba(200, 170, 110, 0.4);
+  direction: ltr;
+}
+
+/* ─── Timer Section ──────────────────────────────────────────────── */
+
+.timer-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.timer-ring {
+  position: relative;
+  width: 110px;
+  height: 110px;
+}
+
+.timer-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.timer-track {
+  fill: none;
+  stroke: rgba(200, 170, 110, 0.1);
+  stroke-width: 4;
+}
+
+.timer-progress {
+  fill: none;
+  stroke: rgba(200, 170, 110, 0.6);
+  stroke-width: 4;
+  stroke-linecap: round;
+  /* Circumference = 2 * π * 54 ≈ 339.29 */
+  stroke-dasharray: 339.29;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.timer-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  font-weight: 300;
+  color: #e8e0d0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  direction: ltr;
+}
+
+.timer-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.35);
+  direction: ltr;
+}
+
+/* ─── Dismiss Button ─────────────────────────────────────────────── */
+
+.dismiss-section {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.dismiss-section.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dismiss-btn {
+  background: transparent;
+  border: 1px solid rgba(200, 170, 110, 0.3);
+  color: rgba(200, 170, 110, 0.8);
+  padding: 14px 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.dismiss-btn:hover {
+  background: rgba(200, 170, 110, 0.08);
+  border-color: rgba(200, 170, 110, 0.5);
+  color: rgba(200, 170, 110, 1);
+}
+
+.dismiss-btn:active {
+  transform: scale(0.97);
+}
+
+.dismiss-btn-text {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ─── Confirmation Dialog ────────────────────────────────────────── */
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: confirmFadeIn 0.3s ease-out;
+}
+
+.confirm-dialog.visible {
+  display: flex;
+}
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-card {
+  background: #22223a;
+  border: 1px solid rgba(200, 170, 110, 0.15);
+  border-radius: 16px;
+  padding: 36px 32px;
+  text-align: center;
+  max-width: 380px;
+  width: 90%;
+  animation: cardSlideUp 0.3s ease-out;
+}
+
+@keyframes cardSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.confirm-question {
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', 'Noto Naskh Arabic', serif;
+  font-size: 2rem;
+  color: #e8e0d0;
+  margin-bottom: 4px;
+}
+
+.confirm-question-en {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 28px;
+  direction: ltr;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.confirm-yes {
+  background: rgba(200, 170, 110, 0.15);
+  border: 1px solid rgba(200, 170, 110, 0.3);
+  color: #e8e0d0;
+  padding: 14px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', serif;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.confirm-yes:hover {
+  background: rgba(200, 170, 110, 0.25);
+  border-color: rgba(200, 170, 110, 0.5);
+}
+
+.confirm-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 12px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-family: 'Traditional Arabic', 'Scheherazade New', 'Amiri', serif;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.confirm-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.confirm-sub {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  direction: ltr;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+
+@media (max-height: 700px) {
+  .lockscreen-content {
+    gap: 16px;
+    padding: 20px 16px;
+  }
+  .prayer-name-ar { font-size: 2.4rem; }
+  .main-message { font-size: 1.5rem; }
+  .mosque-icon { width: 72px; height: 60px; }
+  .verse-section { padding: 14px 20px; }
+  .verse-arabic { font-size: 1.1rem; }
+  .timer-ring { width: 90px; height: 90px; }
+  .timer-display { font-size: 1.5rem; }
+}
+
+@media (max-height: 550px) {
+  .calligraphy-header { display: none; }
+  .verse-section { display: none; }
+  .mosque-icon { width: 56px; height: 46px; }
+  .lockscreen-content { gap: 12px; }
+}

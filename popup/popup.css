@@ -1,0 +1,402 @@
+/* ============================================================
+   Ila Salaty — Popup Styles
+   Cohesive with lockscreen: deep teals, warm golds, soft creams
+   ============================================================ */
+
+/* --- Color Tokens (consistent with lockscreen) --- */
+:root {
+  --bg-deep:       #0A3D3F;
+  --bg-midnight:   #071E2F;
+  --bg-surface:    #0C4547;
+  --bg-card:       #0E5254;
+  --gold:          #D4A843;
+  --gold-light:    #E8C97A;
+  --cream:         #F5F0E1;
+  --cream-muted:   #D6CEBC;
+  --teal:          #0D7377;
+  --teal-light:    #14A3A8;
+  --earth:         #5C4A32;
+  --text-primary:  #F5F0E1;
+  --text-secondary:rgba(245, 240, 225, 0.65);
+  --border:        rgba(245, 240, 225, 0.1);
+  --border-gold:   rgba(212, 168, 67, 0.3);
+  --next-bg:       rgba(212, 168, 67, 0.08);
+}
+
+/* --- Reset --- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 15px;
+}
+
+body {
+  width: 360px;
+  font-family: 'Amiri', 'Traditional Arabic', serif;
+  background: linear-gradient(175deg, var(--bg-deep) 0%, var(--bg-midnight) 100%);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Header --- */
+.header {
+  padding: 1rem 1.2rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.header__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header__icon {
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.header__title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.header__date {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.header__date-sep {
+  color: rgba(245, 240, 225, 0.3);
+}
+
+/* --- Prayer Rows --- */
+.prayers {
+  padding: 0.6rem 0;
+}
+
+.prayer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s ease;
+}
+
+.prayer-row:last-of-type {
+  border-bottom: none;
+}
+
+.prayer-row.is-next {
+  background: var(--next-bg);
+  border-right: 3px solid var(--gold);
+}
+
+.prayer-row__names {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.prayer-row__ar {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.prayer-row.is-next .prayer-row__ar {
+  color: var(--gold);
+}
+
+.prayer-row__en {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.prayer-row__time {
+  font-family: 'Amiri', Georgia, serif;
+  font-size: 0.95rem;
+  color: var(--cream-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.prayer-row.is-next .prayer-row__time {
+  color: var(--gold-light);
+  font-weight: 700;
+}
+
+/* --- Next Prayer Countdown --- */
+.next-prayer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--next-bg);
+  border-top: 1px solid var(--border-gold);
+}
+
+.next-prayer__label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.next-prayer__countdown {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-family: 'Amiri', Georgia, serif;
+}
+
+/* --- Settings Toggle --- */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'Amiri', Georgia, serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.settings-toggle:hover {
+  color: var(--cream);
+  background: rgba(245, 240, 225, 0.03);
+}
+
+.settings-toggle:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.settings-toggle__icon {
+  opacity: 0.7;
+}
+
+.settings-toggle__chevron {
+  transition: transform 0.3s ease;
+}
+
+.settings-toggle[aria-expanded="true"] .settings-toggle__chevron {
+  transform: rotate(180deg);
+}
+
+/* --- Settings Panel --- */
+.settings {
+  padding: 0.75rem 1.2rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.settings[hidden] {
+  display: none;
+}
+
+.settings__group {
+  margin-bottom: 0.9rem;
+}
+
+.settings__group--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings__label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--cream-muted);
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings__group--row .settings__label {
+  margin-bottom: 0;
+}
+
+.settings__sub-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.15rem;
+  display: block;
+}
+
+.settings__row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.settings__field {
+  flex: 1;
+}
+
+.settings__input,
+.settings__select {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--cream);
+  font-family: 'Amiri', Georgia, serif;
+  font-size: 0.85rem;
+  transition: border-color 0.2s;
+}
+
+.settings__input:focus,
+.settings__select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.settings__input::placeholder {
+  color: rgba(245, 240, 225, 0.3);
+}
+
+.settings__select option {
+  background: var(--bg-midnight);
+  color: var(--cream);
+}
+
+/* Radio group */
+.settings__radio-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.settings__radio {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--cream-muted);
+  cursor: pointer;
+}
+
+.settings__radio input[type="radio"] {
+  accent-color: var(--gold);
+  width: 14px;
+  height: 14px;
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle__slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  background: rgba(245, 240, 225, 0.15);
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.toggle__slider::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cream-muted);
+  transition: transform 0.3s, background 0.3s;
+}
+
+.toggle input:checked + .toggle__slider {
+  background: var(--teal);
+}
+
+.toggle input:checked + .toggle__slider::before {
+  transform: translateX(18px);
+  background: var(--gold);
+}
+
+.toggle input:focus-visible + .toggle__slider {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Buttons */
+.settings__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cream-muted);
+  font-family: 'Amiri', Georgia, serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settings__btn:hover {
+  border-color: var(--cream-muted);
+  color: var(--cream);
+}
+
+.settings__btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.settings__btn--detect {
+  margin-top: 0.4rem;
+}
+
+.settings__btn--save {
+  width: 100%;
+  justify-content: center;
+  margin-top: 0.4rem;
+  padding: 0.55rem 1rem;
+  background: var(--gold);
+  color: var(--earth);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+.settings__btn--save:hover {
+  background: var(--gold-light);
+  border-color: var(--gold-light);
+  color: var(--earth);
+}
+
+.settings__status {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--teal-light);
+  margin-top: 0.3rem;
+  min-height: 1em;
+}

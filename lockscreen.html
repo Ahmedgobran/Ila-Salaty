@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إلا صلاتي — Prayer Time</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="lockscreen.css">
+</head>
+<body>
+  <div class="lockscreen" id="lockscreen">
+    <!-- Decorative geometric pattern overlay -->
+    <div class="geometric-pattern"></div>
+
+    <!-- Main content -->
+    <div class="lockscreen-content">
+      <!-- Arabic calligraphy header -->
+      <div class="calligraphy-header">
+        <span class="bismillah">بسم الله الرحمن الرحيم</span>
+      </div>
+
+      <!-- Prayer icon / mosque silhouette -->
+      <div class="mosque-icon">
+        <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Dome -->
+          <path d="M60 8 C40 8 25 28 25 45 L95 45 C95 28 80 8 60 8Z" fill="currentColor" opacity="0.9"/>
+          <!-- Crescent -->
+          <circle cx="60" cy="5" r="4" fill="currentColor"/>
+          <circle cx="61.5" cy="4" r="3" fill="#1a1a2e"/>
+          <!-- Left minaret -->
+          <rect x="12" y="20" width="8" height="60" rx="1" fill="currentColor" opacity="0.8"/>
+          <path d="M16 12 C12 12 10 18 10 20 L22 20 C22 18 20 12 16 12Z" fill="currentColor" opacity="0.8"/>
+          <circle cx="16" cy="10" r="2.5" fill="currentColor"/>
+          <circle cx="17" cy="9.5" r="1.8" fill="#1a1a2e"/>
+          <!-- Right minaret -->
+          <rect x="100" y="20" width="8" height="60" rx="1" fill="currentColor" opacity="0.8"/>
+          <path d="M104 12 C100 12 98 18 98 20 L110 20 C110 18 108 12 104 12Z" fill="currentColor" opacity="0.8"/>
+          <circle cx="104" cy="10" r="2.5" fill="currentColor"/>
+          <circle cx="105" cy="9.5" r="1.8" fill="#1a1a2e"/>
+          <!-- Building base -->
+          <rect x="22" y="45" width="76" height="35" fill="currentColor" opacity="0.7"/>
+          <!-- Door arch -->
+          <path d="M50 80 L50 60 C50 52 70 52 70 60 L70 80Z" fill="#1a1a2e" opacity="0.6"/>
+          <!-- Windows -->
+          <circle cx="38" cy="58" r="4" fill="#1a1a2e" opacity="0.4"/>
+          <circle cx="82" cy="58" r="4" fill="#1a1a2e" opacity="0.4"/>
+          <!-- Ground line -->
+          <rect x="5" y="80" width="110" height="3" rx="1.5" fill="currentColor" opacity="0.3"/>
+        </svg>
+      </div>
+
+      <!-- Prayer name -->
+      <div class="prayer-name-section">
+        <h1 class="prayer-name-ar" id="prayerNameAr">الظهر</h1>
+        <h2 class="prayer-name-en" id="prayerNameEn">Dhuhr Prayer</h2>
+      </div>
+
+      <!-- Main message -->
+      <div class="message-section">
+        <p class="main-message">حان وقت الصلاة</p>
+        <p class="sub-message">It is time to pray. Leave what you are doing and respond to the call.</p>
+      </div>
+
+      <!-- Quran verse -->
+      <div class="verse-section">
+        <p class="verse-arabic" id="verseArabic">إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا</p>
+        <p class="verse-translation" id="verseTranslation">"Indeed, prayer has been decreed upon the believers at specified times."</p>
+        <p class="verse-reference" id="verseReference">— An-Nisa 4:103</p>
+      </div>
+
+      <!-- Countdown timer -->
+      <div class="timer-section">
+        <div class="timer-ring">
+          <svg class="timer-svg" viewBox="0 0 120 120">
+            <circle class="timer-track" cx="60" cy="60" r="54" />
+            <circle class="timer-progress" id="timerProgress" cx="60" cy="60" r="54" />
+          </svg>
+          <div class="timer-display" id="timerDisplay">5:00</div>
+        </div>
+        <p class="timer-label">Reminder will close in</p>
+      </div>
+
+      <!-- Dismiss section (hidden initially) -->
+      <div class="dismiss-section" id="dismissSection">
+        <button class="dismiss-btn" id="dismissBtn">
+          <span class="dismiss-btn-text">I have prayed — صليت</span>
+        </button>
+      </div>
+
+      <!-- Confirmation dialog (hidden) -->
+      <div class="confirm-dialog" id="confirmDialog">
+        <div class="confirm-card">
+          <p class="confirm-question">هل صليت؟</p>
+          <p class="confirm-question-en">Have you prayed?</p>
+          <div class="confirm-actions">
+            <button class="confirm-yes" id="confirmYes">
+              <span>نعم، صليت</span>
+              <span class="confirm-sub">Yes, I have prayed</span>
+            </button>
+            <button class="confirm-cancel" id="confirmCancel">
+              <span>لا، سأبقى</span>
+              <span class="confirm-sub">No, I'll stay</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="lockscreen.js"></script>
+</body>
+</html>

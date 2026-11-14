@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360">
+  <title>إلا صلاتي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header__brand">
+      <!-- Inline mosque SVG icon -->
+      <svg class="header__icon" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+        <g fill="currentColor">
+          <!-- Dome -->
+          <path d="M8 18 Q8 10 16 8 Q24 10 24 18 L24 20 L8 20 Z" opacity="0.9"/>
+          <!-- Base -->
+          <rect x="6" y="20" width="20" height="4" rx="1"/>
+          <!-- Minaret left -->
+          <rect x="4" y="12" width="2.5" height="12" rx="1"/>
+          <circle cx="5.25" cy="11" r="1.8"/>
+          <!-- Minaret right -->
+          <rect x="25.5" y="12" width="2.5" height="12" rx="1"/>
+          <circle cx="26.75" cy="11" r="1.8"/>
+          <!-- Crescent on dome -->
+          <path d="M15.5 6.5 A2.5 2.5 0 1 1 17 8.5 A2 2 0 1 0 15.5 6.5" fill="currentColor"/>
+        </g>
+      </svg>
+      <h1 class="header__title">إلا صلاتي</h1>
+    </div>
+    <div class="header__date">
+      <span id="dateGregorian" dir="ltr" lang="en"></span>
+      <span class="header__date-sep">·</span>
+      <span id="dateHijri" dir="rtl" lang="ar"></span>
+    </div>
+  </header>
+
+  <!-- Prayer Times -->
+  <section class="prayers" aria-label="Prayer times">
+    <div class="prayer-row" data-prayer="fajr">
+      <div class="prayer-row__names">
+        <span class="prayer-row__ar" lang="ar">الفجر</span>
+        <span class="prayer-row__en" dir="ltr" lang="en">Fajr</span>
+      </div>
+      <span class="prayer-row__time" dir="ltr" id="timeFajr">--:--</span>
+    </div>
+    <div class="prayer-row" data-prayer="dhuhr">
+      <div class="prayer-row__names">
+        <span class="prayer-row__ar" lang="ar">الظهر</span>
+        <span class="prayer-row__en" dir="ltr" lang="en">Dhuhr</span>
+      </div>
+      <span class="prayer-row__time" dir="ltr" id="timeDhuhr">--:--</span>
+    </div>
+    <div class="prayer-row" data-prayer="asr">
+      <div class="prayer-row__names">
+        <span class="prayer-row__ar" lang="ar">العصر</span>
+        <span class="prayer-row__en" dir="ltr" lang="en">Asr</span>
+      </div>
+      <span class="prayer-row__time" dir="ltr" id="timeAsr">--:--</span>
+    </div>
+    <div class="prayer-row" data-prayer="maghrib">
+      <div class="prayer-row__names">
+        <span class="prayer-row__ar" lang="ar">المغرب</span>
+        <span class="prayer-row__en" dir="ltr" lang="en">Maghrib</span>
+      </div>
+      <span class="prayer-row__time" dir="ltr" id="timeMaghrib">--:--</span>
+    </div>
+    <div class="prayer-row" data-prayer="isha">
+      <div class="prayer-row__names">
+        <span class="prayer-row__ar" lang="ar">العشاء</span>
+        <span class="prayer-row__en" dir="ltr" lang="en">Isha</span>
+      </div>
+      <span class="prayer-row__time" dir="ltr" id="timeIsha">--:--</span>
+    </div>
+
+    <!-- Next prayer countdown -->
+    <div class="next-prayer" id="nextPrayerInfo">
+      <span class="next-prayer__label" dir="ltr" lang="en">Next prayer in</span>
+      <span class="next-prayer__countdown" dir="ltr" id="nextCountdown">--</span>
+    </div>
+  </section>
+
+  <!-- Settings toggle -->
+  <button class="settings-toggle" id="settingsToggle" aria-expanded="false" aria-controls="settingsPanel">
+    <svg class="settings-toggle__icon" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path fill="currentColor" d="M10 13a3 3 0 100-6 3 3 0 000 6zm7.7-2.3l-1.2-.7a6.5 6.5 0 000-1l1.2-.7a.5.5 0 00.2-.6l-1-1.7a.5.5 0 00-.6-.2l-1.3.5a5.9 5.9 0 00-.9-.5l-.2-1.4a.5.5 0 00-.5-.4h-2a.5.5 0 00-.5.4l-.2 1.4c-.3.1-.6.3-.9.5L8.5 5.8a.5.5 0 00-.6.2l-1 1.7a.5.5 0 00.2.6l1.2.7a6.5 6.5 0 000 1l-1.2.7a.5.5 0 00-.2.6l1 1.7a.5.5 0 00.6.2l1.3-.5c.3.2.6.4.9.5l.2 1.4a.5.5 0 00.5.4h2a.5.5 0 00.5-.4l.2-1.4c.3-.1.6-.3.9-.5l1.3.5a.5.5 0 00.6-.2l1-1.7a.5.5 0 00-.2-.6z"/>
+    </svg>
+    <span dir="ltr" lang="en">Settings</span>
+    <span dir="rtl" lang="ar">الإعدادات</span>
+    <svg class="settings-toggle__chevron" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M6 8l4 4 4-4"/>
+    </svg>
+  </button>
+
+  <!-- Settings Panel (collapsible) -->
+  <section class="settings" id="settingsPanel" hidden>
+    <!-- Location -->
+    <div class="settings__group">
+      <label class="settings__label" dir="ltr" lang="en">Location</label>
+      <div class="settings__row">
+        <div class="settings__field">
+          <label class="settings__sub-label" for="inputLat" dir="ltr">Lat</label>
+          <input type="number" id="inputLat" class="settings__input" step="0.0001" placeholder="21.4225">
+        </div>
+        <div class="settings__field">
+          <label class="settings__sub-label" for="inputLng" dir="ltr">Lng</label>
+          <input type="number" id="inputLng" class="settings__input" step="0.0001" placeholder="39.8262">
+        </div>
+      </div>
+      <button class="settings__btn settings__btn--detect" id="detectLocation" dir="ltr">
+        <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+          <circle cx="10" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10 2v4M10 14v4M2 10h4M14 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Detect Location
+      </button>
+    </div>
+
+    <!-- Calculation Method -->
+    <div class="settings__group">
+      <label class="settings__label" for="calcMethod" dir="ltr" lang="en">Calculation Method</label>
+      <select id="calcMethod" class="settings__select">
+        <option value="MWL">Muslim World League</option>
+        <option value="ISNA">ISNA</option>
+        <option value="Egypt">Egyptian General Authority</option>
+        <option value="Makkah">Umm al-Qura (Makkah)</option>
+        <option value="Karachi">University of Islamic Sciences, Karachi</option>
+      </select>
+    </div>
+
+    <!-- Lockscreen toggle -->
+    <div class="settings__group settings__group--row">
+      <label class="settings__label" for="lockscreenToggle" dir="ltr" lang="en">Lock Screen</label>
+      <label class="toggle" aria-label="Enable or disable lock screen">
+        <input type="checkbox" id="lockscreenToggle" checked>
+        <span class="toggle__slider"></span>
+      </label>
+    </div>
+
+    <!-- Save -->
+    <button class="settings__btn settings__btn--save" id="saveSettings" dir="ltr">
+      Save Settings
+    </button>
+    <button class="settings__btn settings__btn--test" id="testLockscreen" dir="ltr" style="margin-top: 8px; background: rgba(13, 115, 119, 0.2); border: 1px solid var(--teal); color: var(--gold); cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 100%; font-family: inherit; transition: all 0.2s ease;">
+      ▶ Test Lock Screen Now (تجربة شاشة التذكير)
+    </button>
+    <p class="settings__status" id="saveStatus" dir="ltr" aria-live="polite"></p>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>

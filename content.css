@@ -1,0 +1,71 @@
+/*
+ * Ila Salaty — Content Script Styles
+ * 
+ * Styles for the lock screen overlay injected into web pages.
+ * Uses extreme z-index to stay on top of all page content.
+ */
+
+/* ─── Fade-in Animation ──────────────────────────────────────────── */
+
+@keyframes ilaSalatyFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ilaSalatyFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* ─── Backdrop ───────────────────────────────────────────────────── */
+
+.ila-salaty-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  z-index: 2147483646 !important;
+  animation: ilaSalatyFadeIn 0.5s ease-out !important;
+  pointer-events: all !important;
+}
+
+/* ─── Overlay Container ──────────────────────────────────────────── */
+
+.ila-salaty-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483647 !important;
+  animation: ilaSalatyFadeIn 0.5s ease-out !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: all !important;
+}
+
+/* ─── Iframe ─────────────────────────────────────────────────────── */
+
+.ila-salaty-iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+/* ─── Fade Out ───────────────────────────────────────────────────── */
+
+.ila-salaty-fade-out {
+  animation: ilaSalatyFadeOut 0.4s ease-out forwards !important;
+}
