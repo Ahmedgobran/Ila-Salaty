@@ -29,7 +29,10 @@
   // ─── Listen for messages from the lockscreen iframe ─────────────────
 
   window.addEventListener('message', (event) => {
-    // Only accept messages from our extension's iframe
+    // Security: Only accept messages originating from this extension's pages
+    const expectedOrigin = `chrome-extension://${chrome.runtime.id}`;
+    if (event.origin !== expectedOrigin) return;
+
     if (event.data && event.data.type === 'DISMISS_LOCKSCREEN') {
       // Notify background to clear the reminder across all tabs
       chrome.runtime.sendMessage({ type: 'dismissLockscreen' });

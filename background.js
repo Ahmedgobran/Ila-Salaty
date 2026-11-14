@@ -320,9 +320,4 @@ function isSameDay(d1, d2) {
          d1.getDate() === d2.getDate();
 }
 
-// ─── Keep-Alive (MV3 service workers can be killed) ─────────────────
-// Periodic keepalive to prevent the service worker from being terminated
-// before prayer alarms fire
-chrome.alarms.create('keepalive', { periodInMinutes: 4.9 });
-
-console.log('[Ila Salaty] Background service worker loaded');
+console.log('[Ela Salaty] Background service worker loaded');

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ela Salaty — إلا صلاتي",
-  "description": "Prioritize your prayers. When prayer time arrives, Ila Salaty gently interrupts your browsing to remind you it's time to pray.",
+  "description": "Prioritize your prayers. When prayer time arrives, Ela Salaty gently interrupts your browsing to remind you it's time to pray.",
   "version": "1.0.0",
   "permissions": [
     "storage",
@@ -41,8 +41,7 @@
       "resources": [
         "lockscreen.html",
         "lockscreen.css",
-        "lockscreen.js",
-        "assets/*"
+        "lockscreen.js"
       ],
       "matches": ["<all_urls>"]
     }
