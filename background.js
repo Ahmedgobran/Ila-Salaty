@@ -320,4 +320,4 @@ function isSameDay(d1, d2) {
          d1.getDate() === d2.getDate();
 }
 
-console.log('[Ela Salaty] Background service worker loaded');
+console.log('[Ila Salaty] Background service worker loaded');
