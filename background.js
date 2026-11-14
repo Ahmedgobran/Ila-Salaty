@@ -181,6 +181,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
+  if (alarm.name.startsWith('snooze-')) {
+    const prayerKey = alarm.name.replace('snooze-', '');
+    console.log(`[Ila Salaty] Snooze alarm triggered for ${prayerKey}`);
+    await triggerPrayerReminder(prayerKey);
+    return;
+  }
+
   if (alarm.name.startsWith('prayer-')) {
     const prayerKey = alarm.name.replace('prayer-', '');
     await triggerPrayerReminder(prayerKey);
@@ -195,6 +202,11 @@ async function verifyAndCatchMissedPrayers() {
     const { settings, todaysPrayerTimes, activeReminder } = await chrome.storage.local.get(['settings', 'todaysPrayerTimes', 'activeReminder']);
     const config = settings || DEFAULT_SETTINGS;
     if (!config.enabled) return;
+
+    // Do not interfere if user currently has an active snooze alarm
+    const allAlarms = await chrome.alarms.getAll();
+    const isSnoozed = allAlarms.some(a => a.name.startsWith('snooze-'));
+    if (isSnoozed) return;
 
     const now = new Date();
     // Recalculate if missing
@@ -485,6 +497,17 @@ async function handleMessage(message, sender) {
         chrome.notifications.clear(NOTIFICATION_ID);
       } catch (e) {}
 
+      // Clear any pending snooze alarms since the user has prayed
+      try {
+        const allAlarms = await chrome.alarms.getAll();
+        for (const a of allAlarms) {
+          if (a.name.startsWith('snooze-')) {
+            await chrome.alarms.clear(a.name);
+            console.log(`[Ila Salaty] Dismissed snooze alarm: ${a.name}`);
+          }
+        }
+      } catch (e) {}
+
       // Tell all open tabs to hide lockscreen
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
@@ -493,6 +516,36 @@ async function handleMessage(message, sender) {
         }
       }
       return { success: true };
+    }
+
+    case 'snoozeReminder': {
+      const minutes = parseInt(message.minutes, 10) || 5;
+      const prayerKey = message.prayerKey || 'dhuhr';
+
+      // 1. Clear active reminder state so tabs/popup know lock is released
+      await chrome.storage.local.remove('activeReminder');
+
+      // 2. Clear current notification from action center
+      try {
+        chrome.notifications.clear(NOTIFICATION_ID);
+      } catch (e) {}
+
+      // 3. Clear existing snooze alarms for this prayer and create new one
+      const snoozeAlarmName = `snooze-${prayerKey}`;
+      await chrome.alarms.clear(snoozeAlarmName);
+      const snoozeWhen = Date.now() + (minutes * 60 * 1000);
+      await chrome.alarms.create(snoozeAlarmName, { when: snoozeWhen });
+
+      console.log(`[Ila Salaty] Snooze set for ${prayerKey} at ${new Date(snoozeWhen).toLocaleTimeString()} (${minutes} min)`);
+
+      // 4. Tell all open tabs to hide lockscreen
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id && tab.url && !isRestrictedUrl(tab.url)) {
+          chrome.tabs.sendMessage(tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
+        }
+      }
+      return { success: true, minutes: minutes };
     }
 
     case 'getActiveReminder': {

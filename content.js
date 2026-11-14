@@ -48,6 +48,14 @@
       // Notify background to clear the reminder across all tabs
       chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
       hideLockscreen();
+    } else if (event.data && event.data.type === 'SNOOZE_LOCKSCREEN') {
+      // Notify background to schedule snooze alarm and clear reminder across all tabs
+      chrome.runtime.sendMessage({
+        type: 'snoozeReminder',
+        minutes: event.data.minutes,
+        prayerKey: event.data.prayerKey
+      });
+      hideLockscreen();
     }
   });
 

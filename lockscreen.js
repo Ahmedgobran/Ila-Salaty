@@ -81,15 +81,18 @@
   const confirmYes = document.getElementById('confirmYes');
   const confirmCancel = document.getElementById('confirmCancel');
 
+  const snoozeBtn = document.getElementById('snoozeBtn');
+  const snoozeDropdownToggle = document.getElementById('snoozeDropdownToggle');
+  const snoozeMenu = document.getElementById('snoozeMenu');
+  const snoozeBtnText = document.getElementById('snoozeBtnText');
+  const snoozeOptions = document.querySelectorAll('.snooze-option');
+
   // ─── Timer State ───────────────────────────────────────────────────
   const TOTAL_SECONDS = lockDuration * 60;
   const CIRCUMFERENCE = 2 * Math.PI * 54; // radius = 54 from SVG
   let remainingSeconds = TOTAL_SECONDS;
   let timerInterval = null;
-  let canDismissEarly = false;
-
-  // Show dismiss button after 30 seconds (create friction, not punishment)
-  const EARLY_DISMISS_DELAY = 30; // seconds
+  let currentSnoozeMinutes = 5;
 
   // ─── Start Timer ───────────────────────────────────────────────────
 
@@ -112,13 +115,6 @@
 
       updateTimerDisplay();
       updateTimerRing();
-
-      // Enable early dismiss after delay
-      const elapsed = TOTAL_SECONDS - remainingSeconds;
-      if (elapsed >= EARLY_DISMISS_DELAY && !canDismissEarly) {
-        canDismissEarly = true;
-        dismissSection.classList.add('visible');
-      }
     }, 1000);
   }
 
@@ -136,18 +132,24 @@
 
   // ─── Dismiss Flow ─────────────────────────────────────────────────
 
-  dismissBtn.addEventListener('click', () => {
-    // Show confirmation dialog
-    confirmDialog.classList.add('visible');
-  });
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      // Show confirmation dialog
+      confirmDialog.classList.add('visible');
+    });
+  }
 
-  confirmYes.addEventListener('click', () => {
-    dismissLockscreen();
-  });
+  if (confirmYes) {
+    confirmYes.addEventListener('click', () => {
+      dismissLockscreen();
+    });
+  }
 
-  confirmCancel.addEventListener('click', () => {
-    confirmDialog.classList.remove('visible');
-  });
+  if (confirmCancel) {
+    confirmCancel.addEventListener('click', () => {
+      confirmDialog.classList.remove('visible');
+    });
+  }
 
   function dismissLockscreen() {
     clearInterval(timerInterval);
@@ -156,7 +158,9 @@
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Ila Salaty] Failed to send dismissLockscreen message:', e);
+    }
 
     // If embedded inside a web page iframe:
     if (window !== window.parent) {
@@ -165,6 +169,69 @@
       // If opened as a standalone tab (fallback for restricted URLs / edge://):
       window.close();
     }
+  }
+
+  // ─── Snooze Flow ──────────────────────────────────────────────────
+
+  function executeSnooze(minutes) {
+    const mins = parseInt(minutes, 10) || currentSnoozeMinutes || 5;
+    clearInterval(timerInterval);
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'snoozeReminder',
+          minutes: mins,
+          prayerKey: prayerKey
+        });
+      }
+    } catch (e) {
+      console.error('[Ila Salaty] Failed to send snoozeReminder message:', e);
+    }
+
+    if (window !== window.parent) {
+      window.parent.postMessage({
+        type: 'SNOOZE_LOCKSCREEN',
+        minutes: mins,
+        prayerKey: prayerKey
+      }, '*');
+    } else {
+      window.close();
+    }
+  }
+
+  if (snoozeBtn) {
+    snoozeBtn.addEventListener('click', () => {
+      executeSnooze(currentSnoozeMinutes);
+    });
+  }
+
+  if (snoozeDropdownToggle && snoozeMenu) {
+    snoozeDropdownToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      snoozeMenu.classList.toggle('visible');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!snoozeMenu.contains(e.target) && e.target !== snoozeDropdownToggle) {
+        snoozeMenu.classList.remove('visible');
+      }
+    });
+
+    snoozeOptions.forEach((option) => {
+      option.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mins = parseInt(option.getAttribute('data-minutes'), 10) || 5;
+        currentSnoozeMinutes = mins;
+        snoozeOptions.forEach(opt => opt.classList.remove('active'));
+        option.classList.add('active');
+        if (snoozeBtnText) {
+          snoozeBtnText.textContent = `Remind in ${mins} min — ذكّرني بعد ${mins} د`;
+        }
+        snoozeMenu.classList.remove('visible');
+        executeSnooze(mins);
+      });
+    });
   }
 
   // ─── Block right-click in the lockscreen ───────────────────────────

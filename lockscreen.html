@@ -82,11 +82,44 @@
         <p class="timer-label">Reminder will close in</p>
       </div>
 
-      <!-- Dismiss section (hidden initially) -->
+      <!-- Dismiss & Snooze section -->
       <div class="dismiss-section" id="dismissSection">
-        <button class="dismiss-btn" id="dismissBtn">
+        <button class="dismiss-btn" id="dismissBtn" type="button">
           <span class="dismiss-btn-text">I have prayed — صليت</span>
         </button>
+
+        <div class="snooze-wrapper" id="snoozeWrapper">
+          <button class="snooze-btn" id="snoozeBtn" type="button" title="Snooze reminder">
+            <svg class="snooze-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span class="snooze-btn-text" id="snoozeBtnText">Remind in 5 min — ذكّرني بعد ٥ د</span>
+          </button>
+          <button class="snooze-dropdown-toggle" id="snoozeDropdownToggle" type="button" aria-label="Select snooze duration" title="Change snooze duration">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <div class="snooze-menu" id="snoozeMenu">
+            <button type="button" class="snooze-option active" data-minutes="5">
+              <span>5 minutes</span>
+              <span class="snooze-option-ar">٥ دقائق</span>
+            </button>
+            <button type="button" class="snooze-option" data-minutes="10">
+              <span>10 minutes</span>
+              <span class="snooze-option-ar">١٠ دقائق</span>
+            </button>
+            <button type="button" class="snooze-option" data-minutes="15">
+              <span>15 minutes</span>
+              <span class="snooze-option-ar">١٥ دقيقة</span>
+            </button>
+            <button type="button" class="snooze-option" data-minutes="20">
+              <span>20 minutes</span>
+              <span class="snooze-option-ar">٢٠ دقيقة</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Confirmation dialog (hidden) -->
