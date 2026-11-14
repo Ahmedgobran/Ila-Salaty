@@ -16,13 +16,24 @@
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SHOW_LOCKSCREEN') {
-      showLockscreen(message);
-      sendResponse({ success: true });
+      try {
+        showLockscreen(message);
+        sendResponse({ success: true });
+      } catch (err) {
+        console.error('[Ila Salaty] Content script failed to show lockscreen:', err);
+        sendResponse({ success: false, error: err.message });
+      }
+      return false;
     }
 
     if (message.type === 'HIDE_LOCKSCREEN') {
-      hideLockscreen();
-      sendResponse({ success: true });
+      try {
+        hideLockscreen();
+        sendResponse({ success: true });
+      } catch (err) {
+        sendResponse({ success: false });
+      }
+      return false;
     }
   });
 
@@ -45,48 +56,54 @@
   function showLockscreen(data) {
     // Don't stack multiple lockscreens
     if (isLockscreenActive) return;
-    isLockscreenActive = true;
 
-    // Create backdrop
-    const backdrop = document.createElement('div');
-    backdrop.id = 'ila-salaty-backdrop';
-    backdrop.className = 'ila-salaty-backdrop';
+    try {
+      isLockscreenActive = true;
 
-    // Create iframe container
-    const container = document.createElement('div');
-    container.id = 'ila-salaty-overlay';
-    container.className = 'ila-salaty-overlay';
+      // Create backdrop
+      const backdrop = document.createElement('div');
+      backdrop.id = 'ila-salaty-backdrop';
+      backdrop.className = 'ila-salaty-backdrop';
 
-    // Create iframe pointing to our lockscreen page
-    const iframe = document.createElement('iframe');
-    const lockscreenUrl = chrome.runtime.getURL('lockscreen.html');
-    
-    // Pass prayer data via URL params
-    const params = new URLSearchParams({
-      prayer: data.prayer.en,
-      prayerAr: data.prayer.ar,
-      prayerKey: data.prayerKey,
-      lockDuration: data.lockDuration || 5
-    });
-    iframe.src = `${lockscreenUrl}?${params.toString()}`;
-    iframe.className = 'ila-salaty-iframe';
-    iframe.setAttribute('allowtransparency', 'true');
-    iframe.setAttribute('frameborder', '0');
+      // Create iframe container
+      const container = document.createElement('div');
+      container.id = 'ila-salaty-overlay';
+      container.className = 'ila-salaty-overlay';
 
-    container.appendChild(iframe);
-    document.documentElement.appendChild(backdrop);
-    document.documentElement.appendChild(container);
+      // Create iframe pointing to our lockscreen page
+      const iframe = document.createElement('iframe');
+      const lockscreenUrl = chrome.runtime.getURL('lockscreen.html');
+      
+      // Pass prayer data via URL params
+      const params = new URLSearchParams({
+        prayer: data.prayer.en,
+        prayerAr: data.prayer.ar,
+        prayerKey: data.prayerKey,
+        lockDuration: data.lockDuration || 5
+      });
+      iframe.src = `${lockscreenUrl}?${params.toString()}`;
+      iframe.className = 'ila-salaty-iframe';
+      iframe.setAttribute('allowtransparency', 'true');
+      iframe.setAttribute('frameborder', '0');
 
-    lockscreenOverlay = container;
-    lockscreenIframe = iframe;
+      container.appendChild(iframe);
+      document.documentElement.appendChild(backdrop);
+      document.documentElement.appendChild(container);
 
-    // Pause any playing media on the page
-    pauseAllMedia();
+      lockscreenOverlay = container;
+      lockscreenIframe = iframe;
 
-    // Block keyboard shortcuts while lockscreen is active
-    document.addEventListener('keydown', blockKeyboard, true);
+      // Pause any playing media on the page
+      pauseAllMedia();
 
-    console.log('[Ila Salaty] Lock screen shown');
+      // Block keyboard shortcuts while lockscreen is active
+      document.addEventListener('keydown', blockKeyboard, true);
+
+      console.log('[Ila Salaty] Lock screen shown');
+    } catch (err) {
+      isLockscreenActive = false;
+      throw err;
+    }
   }
 
   // ─── Hide Lock Screen ─────────────────────────────────────────────
