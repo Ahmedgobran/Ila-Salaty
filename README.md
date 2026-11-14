@@ -35,7 +35,7 @@ Ela Salaty can be installed manually in Google Chrome or compatible Chromium-bas
 Clone the repository:
 
 ```bash
-git clone https://github.com/AhmedGobran/ela-salaty.git
+git clone https://github.com/Ahmedgobran/Ila-Salaty.git
 ```
 
 Alternatively, download the repository as a ZIP file and extract it.
