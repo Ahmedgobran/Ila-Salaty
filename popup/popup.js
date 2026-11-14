@@ -368,8 +368,12 @@
     var testBtn = document.getElementById("testLockscreen");
     if (testBtn) {
       testBtn.addEventListener("click", function () {
+        testBtn.disabled = true;
+        testBtn.textContent = "Launching Lock Screen...";
         chrome.runtime.sendMessage({ type: "testLockscreen", prayerKey: "dhuhr" }, function () {
-          window.close();
+          setTimeout(function () {
+            window.close();
+          }, 200);
         });
       });
     }

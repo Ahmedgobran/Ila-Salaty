@@ -186,12 +186,13 @@
         const reminder = response.activeReminder;
         const elapsed = (Date.now() - reminder.triggeredAt) / 1000 / 60;
         
+        const duration = reminder.lockDuration || 5;
         // Only show if the reminder is less than the lock duration old
-        if (elapsed < 5) {
+        if (elapsed < duration) {
           showLockscreen({
             prayer: reminder.prayer,
             prayerKey: reminder.prayerKey,
-            lockDuration: 5 - Math.floor(elapsed) // Remaining time
+            lockDuration: duration - Math.floor(elapsed) // Remaining time
           });
         }
       }

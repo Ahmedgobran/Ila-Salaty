@@ -151,8 +151,20 @@
 
   function dismissLockscreen() {
     clearInterval(timerInterval);
-    // Send dismiss message to parent (content script)
-    window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
+    // Send message to background to clear active reminder and notification
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
+      }
+    } catch (e) {}
+
+    // If embedded inside a web page iframe:
+    if (window !== window.parent) {
+      window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
+    } else {
+      // If opened as a standalone tab (fallback for restricted URLs / edge://):
+      window.close();
+    }
   }
 
   // ─── Block right-click in the lockscreen ───────────────────────────
