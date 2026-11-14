@@ -1,8 +1,8 @@
-# Privacy Policy — Ela Salaty (إلا صلاتي)
+# Privacy Policy — Ila Salaty (إلا صلاتي)
 
 **Last updated:** November 14, 2026
 
-**Ela Salaty (إلا صلاتي)** is committed to protecting your privacy. This extension is designed from the ground up to operate locally on your device with minimal data usage and zero telemetry.
+**Ila Salaty (إلا صلاتي)** is committed to protecting your privacy. This extension is designed from the ground up to operate locally on your device with minimal data usage and zero telemetry.
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **Location Data (Latitude & Longitude)**:
   - When you click "Detect Location" or manually enter your coordinates, your latitude and longitude are used **exclusively on your device** by the internal astronomical algorithm to calculate local Islamic prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha).
-  - Your geographic coordinates are **never** transmitted to any server owned or operated by Ela Salaty.
+  - Your geographic coordinates are **never** transmitted to any server owned or operated by Ila Salaty.
   - If you use the online "Detect Location" feature, a query is sent to standard public IP geolocation providers (`ipapi.co` / `freeipapi.com`) solely to determine your approximate city coordinates. No personal identity is linked or stored.
 - **User Settings & Preferences**:
   - Your chosen calculation method, lock duration, and enabled/disabled states are stored purely in your browser's local extension storage (`chrome.storage.local`).
@@ -38,11 +38,11 @@
 
 ## 4. Children's Online Privacy Protection
 
-Ela Salaty does not knowingly collect or solicit any personal information from children or any users.
+Ila Salaty does not knowingly collect or solicit any personal information from children or any users.
 
 ---
 
 ## 5. Contact & Questions
 
 If you have any questions or feedback regarding this Privacy Policy, please open an issue on the official GitHub repository:
-https://github.com/AhmedGobran/ela-salaty
+https://github.com/Ahmedgobran/Ila-Salaty
