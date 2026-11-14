@@ -412,6 +412,28 @@ html, body {
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
 
+@media (max-width: 480px) {
+  .lockscreen-content {
+    gap: 14px;
+    padding: 16px 14px;
+    width: 94%;
+  }
+  .bismillah { font-size: 1.1rem; }
+  .prayer-name-ar { font-size: 2.3rem; }
+  .prayer-name-en { font-size: 0.95rem; }
+  .main-message { font-size: 1.45rem; }
+  .sub-message { font-size: 0.85rem; }
+  .mosque-icon { width: 68px; height: 56px; }
+  .verse-section { padding: 12px 14px; max-width: 100%; }
+  .verse-arabic { font-size: 1.1rem; line-height: 1.7; }
+  .verse-translation { font-size: 0.8rem; }
+  .timer-ring { width: 90px; height: 90px; }
+  .timer-display { font-size: 1.45rem; }
+  .dismiss-btn { padding: 12px 24px; font-size: 0.9rem; }
+  .confirm-card { padding: 24px 18px; }
+  .confirm-question { font-size: 1.6rem; }
+}
+
 @media (max-height: 700px) {
   .lockscreen-content {
     gap: 16px;
