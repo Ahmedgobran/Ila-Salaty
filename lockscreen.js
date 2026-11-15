@@ -82,17 +82,12 @@
   const confirmCancel = document.getElementById('confirmCancel');
 
   const snoozeBtn = document.getElementById('snoozeBtn');
-  const snoozeDropdownToggle = document.getElementById('snoozeDropdownToggle');
-  const snoozeMenu = document.getElementById('snoozeMenu');
-  const snoozeBtnText = document.getElementById('snoozeBtnText');
-  const snoozeOptions = document.querySelectorAll('.snooze-option');
 
   // ─── Timer State ───────────────────────────────────────────────────
   const TOTAL_SECONDS = lockDuration * 60;
   const CIRCUMFERENCE = 2 * Math.PI * 54; // radius = 54 from SVG
   let remainingSeconds = TOTAL_SECONDS;
   let timerInterval = null;
-  let currentSnoozeMinutes = 5;
 
   // ─── Start Timer ───────────────────────────────────────────────────
 
@@ -173,8 +168,8 @@
 
   // ─── Snooze Flow ──────────────────────────────────────────────────
 
-  function executeSnooze(minutes) {
-    const mins = parseInt(minutes, 10) || currentSnoozeMinutes || 5;
+  function executeSnooze(minutes = 5) {
+    const mins = parseInt(minutes, 10) || 5;
     clearInterval(timerInterval);
 
     try {
@@ -202,35 +197,7 @@
 
   if (snoozeBtn) {
     snoozeBtn.addEventListener('click', () => {
-      executeSnooze(currentSnoozeMinutes);
-    });
-  }
-
-  if (snoozeDropdownToggle && snoozeMenu) {
-    snoozeDropdownToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      snoozeMenu.classList.toggle('visible');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!snoozeMenu.contains(e.target) && e.target !== snoozeDropdownToggle) {
-        snoozeMenu.classList.remove('visible');
-      }
-    });
-
-    snoozeOptions.forEach((option) => {
-      option.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const mins = parseInt(option.getAttribute('data-minutes'), 10) || 5;
-        currentSnoozeMinutes = mins;
-        snoozeOptions.forEach(opt => opt.classList.remove('active'));
-        option.classList.add('active');
-        if (snoozeBtnText) {
-          snoozeBtnText.textContent = `Remind in ${mins} min — ذكّرني بعد ${mins} د`;
-        }
-        snoozeMenu.classList.remove('visible');
-        executeSnooze(mins);
-      });
+      executeSnooze(5);
     });
   }
 
