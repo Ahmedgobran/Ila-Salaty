@@ -162,26 +162,26 @@
       console.error('[Ila Salaty] Failed to send dismissLockscreen message:', e);
     }
 
-    // 2. If embedded inside a web page iframe, instruct parent to remove overlay
+    // 2. If embedded inside a web page iframe, instruct parent to remove overlay only
     if (window !== window.parent) {
       try {
         window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
         window.parent.postMessage({ type: 'HIDE_LOCKSCREEN' }, '*');
       } catch (e) {}
+    } else {
+      // 3. Only if opened as a dedicated standalone tab (e.g. for restricted edge:// pages)
+      try {
+        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.getCurrent) {
+          chrome.tabs.getCurrent((tab) => {
+            if (tab && tab.id) chrome.tabs.remove(tab.id);
+          });
+        }
+      } catch (e) {}
+
+      try {
+        window.close();
+      } catch (e) {}
     }
-
-    // 3. If opened as a standalone tab, close tab reliably via chrome.tabs API
-    try {
-      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.getCurrent) {
-        chrome.tabs.getCurrent((tab) => {
-          if (tab && tab.id) chrome.tabs.remove(tab.id);
-        });
-      }
-    } catch (e) {}
-
-    try {
-      window.close();
-    } catch (e) {}
   }
 
   // ─── Block right-click in the lockscreen ───────────────────────────
