@@ -370,15 +370,22 @@
       testBtn.addEventListener("click", function () {
         testBtn.disabled = true;
         testBtn.textContent = "Launching Lock Screen...";
-        try {
-          chrome.runtime.sendMessage({ type: "testLockscreen", prayerKey: "dhuhr" });
-        } catch (e) {
-          console.error("Error sending testLockscreen message:", e);
-        }
-        // Always close popup after brief feedback so it NEVER hangs
-        setTimeout(function () {
-          window.close();
-        }, 150);
+
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+          var targetTabId = (tabs && tabs[0]) ? tabs[0].id : null;
+          try {
+            chrome.runtime.sendMessage({
+              type: "testLockscreen",
+              prayerKey: "dhuhr",
+              tabId: targetTabId
+            });
+          } catch (e) {
+            console.error("Error sending testLockscreen message:", e);
+          }
+          setTimeout(function () {
+            window.close();
+          }, 150);
+        });
       });
     }
 

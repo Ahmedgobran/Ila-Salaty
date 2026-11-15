@@ -40,21 +40,22 @@
   // ─── Listen for messages from the lockscreen iframe ─────────────────
 
   window.addEventListener('message', (event) => {
-    // Security: Only accept messages originating from this extension's pages
-    const expectedOrigin = `chrome-extension://${chrome.runtime.id}`;
-    if (event.origin !== expectedOrigin) return;
+    if (!event.data || typeof event.data !== 'object') return;
 
-    if (event.data && event.data.type === 'DISMISS_LOCKSCREEN') {
-      // Notify background to clear the reminder across all tabs
-      chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
-      hideLockscreen();
-    } else if (event.data && event.data.type === 'SNOOZE_LOCKSCREEN') {
-      // Notify background to schedule snooze alarm and clear reminder across all tabs
-      chrome.runtime.sendMessage({
-        type: 'snoozeReminder',
-        minutes: event.data.minutes,
-        prayerKey: event.data.prayerKey
-      });
+    if (event.data.type === 'DISMISS_LOCKSCREEN' || event.data.type === 'SNOOZE_LOCKSCREEN') {
+      if (event.data.action === 'snooze' || event.data.type === 'SNOOZE_LOCKSCREEN') {
+        try {
+          chrome.runtime.sendMessage({
+            type: 'snoozeReminder',
+            minutes: event.data.minutes || 5,
+            prayerKey: event.data.prayerKey || 'dhuhr'
+          });
+        } catch (e) {}
+      } else {
+        try {
+          chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
+        } catch (e) {}
+      }
       hideLockscreen();
     }
   });
@@ -62,8 +63,8 @@
   // ─── Show Lock Screen ─────────────────────────────────────────────
 
   function showLockscreen(data) {
-    // Don't stack multiple lockscreens
-    if (isLockscreenActive) return;
+    // Check if already displayed
+    if (document.getElementById('ila-salaty-overlay')) return;
 
     try {
       isLockscreenActive = true;
@@ -117,27 +118,23 @@
   // ─── Hide Lock Screen ─────────────────────────────────────────────
 
   function hideLockscreen() {
-    if (!isLockscreenActive) return;
+    isLockscreenActive = false;
 
-    const backdrop = document.getElementById('ila-salaty-backdrop');
-    const overlay = document.getElementById('ila-salaty-overlay');
+    // Immediately hide and remove all lockscreen elements
+    const elements = document.querySelectorAll('.ila-salaty-overlay, .ila-salaty-backdrop, #ila-salaty-overlay, #ila-salaty-backdrop');
+    elements.forEach((el) => {
+      try {
+        el.style.display = 'none';
+        el.remove();
+      } catch (e) {}
+    });
 
-    // Add fade-out animation
-    if (backdrop) backdrop.classList.add('ila-salaty-fade-out');
-    if (overlay) overlay.classList.add('ila-salaty-fade-out');
-
-    // Remove after animation
-    setTimeout(() => {
-      if (backdrop) backdrop.remove();
-      if (overlay) overlay.remove();
-    }, 400);
-
-    // Remove keyboard blocker
     document.removeEventListener('keydown', blockKeyboard, true);
-
     lockscreenOverlay = null;
     lockscreenIframe = null;
-    isLockscreenActive = false;
+
+    console.log('[Ila Salaty] Lock screen hidden');
+  }
 
     console.log('[Ila Salaty] Lock screen hidden');
   }

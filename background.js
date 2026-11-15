@@ -277,47 +277,34 @@ async function getActiveTabSafe() {
 }
 
 /**
- * Send message to a tab with strict timeout so sleeping tabs never hang the background worker
+ * Send message to a tab or dynamically inject content script if not yet loaded
  */
-function sendMessageWithTimeout(tabId, message, timeoutMs = 800) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject(new Error('Tab message timeout'));
-      }
-    }, timeoutMs);
-
+async function ensureTabLocked(tabId, message) {
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, message);
+    if (res && res.success) return true;
+  } catch (e) {
+    // Content script not loaded on this tab yet (e.g. tab opened before extension loaded)
     try {
-      chrome.tabs.sendMessage(tabId, message, (response) => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve(response);
-          }
-        }
-      });
+      await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      const res2 = await chrome.tabs.sendMessage(tabId, message);
+      return Boolean(res2 && res2.success);
     } catch (err) {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        reject(err);
-      }
+      console.log(`[Ila Salaty] Tab ${tabId} could not host overlay:`, err.message);
+      return false;
     }
-  });
+  }
+  return true;
 }
 
 /**
  * Trigger the prayer reminder across tabs with standalone fallback
  */
-async function triggerPrayerReminder(prayerKey, isManualTest = false) {
+async function triggerPrayerReminder(prayerKey, isManualTest = false, preferredTabId = null) {
   const now = Date.now();
-  // Debounce: prevent frantic multi-clicks within 3 seconds
-  if (now - lastTriggerTime < 3000) {
+  // Debounce: prevent frantic multi-clicks within 1 second
+  if (now - lastTriggerTime < 1000) {
     console.log('[Ila Salaty] Reminder trigger debounced');
     return;
   }
@@ -370,40 +357,31 @@ async function triggerPrayerReminder(prayerKey, isManualTest = false) {
     lockDuration: lockDuration
   };
 
-  // 3. TARGET ACTIVE TAB FIRST WITH STRICT TIMEOUT AND STANDALONE FALLBACK
+  // 3. TARGET ACTIVE TAB FIRST (prioritize preferredTabId from popup if available)
+  let activeTab = null;
+  if (preferredTabId) {
+    try {
+      activeTab = await chrome.tabs.get(preferredTabId);
+    } catch (e) {}
+  }
+  if (!activeTab || !activeTab.id) {
+    activeTab = await getActiveTabSafe();
+  }
+
   let activeTabSucceeded = false;
   try {
-    const activeTab = await getActiveTabSafe();
     if (activeTab && activeTab.id) {
       if (!activeTab.url || isRestrictedUrl(activeTab.url) || activeTab.discarded) {
-        // Active tab is restricted (edge://, chrome://, new tab, discarded, intranet)
-        console.log('[Ila Salaty] Active tab cannot host overlay. Opening standalone tab.');
+        // Active tab is restricted (edge://, chrome://, new tab, discarded)
+        console.log('[Ila Salaty] Active tab is restricted. Opening standalone tab.');
         await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
         activeTabSucceeded = true;
       } else {
-        // Normal website tab: try sending message with strict 800ms timeout
-        try {
-          const res = await sendMessageWithTimeout(activeTab.id, message, 800);
-          if (res && res.success) {
-            activeTabSucceeded = true;
-          }
-        } catch (e) {
-          // Tab may need dynamic content script injection
-          try {
-            await chrome.scripting.insertCSS({ target: { tabId: activeTab.id }, files: ['content.css'] });
-            await chrome.scripting.executeScript({ target: { tabId: activeTab.id }, files: ['content.js'] });
-            const res2 = await sendMessageWithTimeout(activeTab.id, message, 800);
-            if (res2 && res2.success) {
-              activeTabSucceeded = true;
-            }
-          } catch (err) {
-            console.log('[Ila Salaty] Active tab injection failed or timed out:', err.message);
-          }
-        }
-
-        // If injection or overlay was blocked by CSP/Trusted-Types on Work Edge:
-        if (!activeTabSucceeded) {
-          console.log('[Ila Salaty] Overlay blocked or timed out on active tab. Opening standalone tab.');
+        const ok = await ensureTabLocked(activeTab.id, message);
+        if (ok) {
+          activeTabSucceeded = true;
+        } else {
+          console.log('[Ila Salaty] Overlay could not be injected on active tab. Opening standalone tab.');
           await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
           activeTabSucceeded = true;
         }
@@ -417,18 +395,14 @@ async function triggerPrayerReminder(prayerKey, isManualTest = false) {
     await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
   }
 
-  // 4. Notify all other eligible background tabs in parallel (non-blocking)
+  // 4. Notify all other open tabs in parallel
   chrome.tabs.query({}).then((tabs) => {
     tabs.forEach((tab) => {
-      if (!tab.id || !tab.url || isRestrictedUrl(tab.url) || tab.discarded) return;
-      sendMessageWithTimeout(tab.id, message, 600).catch(() => {
-        chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content.css'] })
-          .then(() => chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }))
-          .then(() => sendMessageWithTimeout(tab.id, message, 600))
-          .catch(() => {});
-      });
+      if (!tab.id || tab.id === activeTab?.id || !tab.url || isRestrictedUrl(tab.url) || tab.discarded) return;
+      ensureTabLocked(tab.id, message).catch(() => {});
     });
   }).catch(() => {});
+}
 }
 
 /**
@@ -554,8 +528,8 @@ async function handleMessage(message, sender) {
     }
 
     case 'testLockscreen': {
-      // Fire-and-forget: do not block response to popup
-      triggerPrayerReminder(message.prayerKey || 'dhuhr', true).catch((e) => {
+      // Fire-and-forget: do not block response to popup, use message.tabId if available
+      triggerPrayerReminder(message.prayerKey || 'dhuhr', true, message.tabId).catch((e) => {
         console.error('[Ila Salaty] Error in testLockscreen:', e);
       });
       return { success: true };
@@ -565,6 +539,30 @@ async function handleMessage(message, sender) {
       return { error: 'Unknown message type' };
   }
 }
+
+// ─── Active Tab Switching Handler ───────────────────────────────────
+// When user switches tabs while reminder is active, immediately lock that tab too
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    const { activeReminder } = await chrome.storage.local.get('activeReminder');
+    if (!activeReminder) return;
+
+    const elapsed = (Date.now() - activeReminder.triggeredAt) / 1000 / 60;
+    const remaining = (activeReminder.lockDuration || 5) - Math.floor(elapsed);
+    if (remaining <= 0) return;
+
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (!tab || !tab.url || isRestrictedUrl(tab.url) || tab.discarded) return;
+
+    const message = {
+      type: 'SHOW_LOCKSCREEN',
+      prayer: activeReminder.prayer,
+      prayerKey: activeReminder.prayerKey,
+      lockDuration: remaining
+    };
+    await ensureTabLocked(tab.id, message);
+  } catch (e) {}
+});
 
 function isSameDay(d1, d2) {
   return d1.getFullYear() === d2.getFullYear() &&
