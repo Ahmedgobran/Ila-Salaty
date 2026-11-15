@@ -163,12 +163,7 @@ function setupDailyRecalc() {
     periodInMinutes: 15
   });
 
-  // Snooze check every 1 minute to ensure snooze is never delayed or dropped
-  chrome.alarms.create('snooze-check', {
-    periodInMinutes: 1
-  });
-
-  console.log('[Ila Salaty] Alarms initialized: daily-recalc, health-check, and snooze-check');
+  console.log('[Ila Salaty] Alarms initialized: daily-recalc and health-check');
 }
 
 // ─── Alarm Handler ──────────────────────────────────────────────────
@@ -186,24 +181,6 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
-  if (alarm.name === 'snooze-check') {
-    const { snoozeState } = await chrome.storage.local.get('snoozeState');
-    if (snoozeState && Date.now() >= snoozeState.snoozeUntil) {
-      console.log(`[Ila Salaty] Snooze-check detected elapsed snooze for ${snoozeState.prayerKey}`);
-      await chrome.storage.local.remove('snoozeState');
-      await triggerPrayerReminder(snoozeState.prayerKey || 'dhuhr', true);
-    }
-    return;
-  }
-
-  if (alarm.name.startsWith('snooze-')) {
-    const prayerKey = alarm.name.replace('snooze-', '');
-    console.log(`[Ila Salaty] Snooze alarm triggered for ${prayerKey}`);
-    await chrome.storage.local.remove('snoozeState');
-    await triggerPrayerReminder(prayerKey, true);
-    return;
-  }
-
   if (alarm.name.startsWith('prayer-')) {
     const prayerKey = alarm.name.replace('prayer-', '');
     await triggerPrayerReminder(prayerKey);
@@ -215,23 +192,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
  */
 async function verifyAndCatchMissedPrayers() {
   try {
-    // Check if a snooze has elapsed and needs to trigger
-    const { snoozeState } = await chrome.storage.local.get('snoozeState');
-    if (snoozeState && Date.now() >= snoozeState.snoozeUntil) {
-      console.log('[Ila Salaty] Snooze time elapsed on health check. Triggering reminder.');
-      await chrome.storage.local.remove('snoozeState');
-      await triggerPrayerReminder(snoozeState.prayerKey || 'dhuhr', true);
-      return;
-    }
-
     const { settings, todaysPrayerTimes, activeReminder } = await chrome.storage.local.get(['settings', 'todaysPrayerTimes', 'activeReminder']);
     const config = settings || DEFAULT_SETTINGS;
     if (!config.enabled) return;
-
-    // Do not interfere if user currently has an active snooze alarm
-    const allAlarms = await chrome.alarms.getAll();
-    const isSnoozed = allAlarms.some(a => a.name.startsWith('snooze-'));
-    if (isSnoozed) return;
 
     const now = new Date();
     // Recalculate if missing
@@ -551,68 +514,6 @@ async function handleMessage(message, sender) {
       return { success: true };
     }
 
-    case 'snoozeReminder': {
-      const minutes = parseInt(message.minutes, 10) || 5;
-      const prayerKey = message.prayerKey || 'dhuhr';
-
-      // 1. Clear active reminder state so tabs/popup know lock is released
-      await chrome.storage.local.remove('activeReminder');
-
-      // 2. Clear current notification from action center
-      try {
-        chrome.notifications.clear(NOTIFICATION_ID);
-      } catch (e) {}
-
-      // 3. Clear existing snooze alarms for this prayer and create new one
-      const snoozeAlarmName = `snooze-${prayerKey}`;
-      await chrome.alarms.clear(snoozeAlarmName);
-      const snoozeWhen = Date.now() + (minutes * 60 * 1000);
-
-      // Persist snoozeState to storage so it survives service worker dormancy
-      await chrome.storage.local.set({
-        snoozeState: {
-          prayerKey: prayerKey,
-          snoozeUntil: snoozeWhen,
-          minutes: minutes
-        }
-      });
-
-      // Manifest V3 standard relative alarm
-      chrome.alarms.create(snoozeAlarmName, { delayInMinutes: minutes });
-
-      console.log(`[Ila Salaty] Snooze set for ${prayerKey} in ${minutes} min (target: ${new Date(snoozeWhen).toLocaleTimeString()})`);
-
-      // Target sender tab directly first if available
-      const lockscreenUrlPrefix = chrome.runtime.getURL('lockscreen.html');
-      if (sender && sender.tab && sender.tab.id) {
-        if (sender.tab.url && sender.tab.url.startsWith(lockscreenUrlPrefix)) {
-          chrome.tabs.remove(sender.tab.id).catch(() => {});
-        } else {
-          chrome.tabs.sendMessage(sender.tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
-          chrome.scripting.executeScript({
-            target: { tabId: sender.tab.id },
-            func: removeLockscreenDom
-          }).catch(() => {});
-        }
-      }
-
-      // 4. Tell all open tabs to hide lockscreen and close standalone lockscreen tabs
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (!tab.id) continue;
-        if (tab.url && tab.url.startsWith(lockscreenUrlPrefix)) {
-          chrome.tabs.remove(tab.id).catch(() => {});
-        } else if (tab.url && !isRestrictedUrl(tab.url)) {
-          chrome.tabs.sendMessage(tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
-          chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: removeLockscreenDom
-          }).catch(() => {});
-        }
-      }
-      return { success: true, minutes: minutes };
-    }
-
     case 'getActiveReminder': {
       const { activeReminder } = await chrome.storage.local.get('activeReminder');
       return { activeReminder: activeReminder || null };
@@ -635,16 +536,6 @@ async function handleMessage(message, sender) {
 // When user switches tabs while reminder is active, immediately lock that tab too
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   try {
-    // 1. Check if an active snooze has elapsed and needs to trigger
-    const { snoozeState } = await chrome.storage.local.get('snoozeState');
-    if (snoozeState && Date.now() >= snoozeState.snoozeUntil) {
-      console.log('[Ila Salaty] Snooze time elapsed on tab switch. Triggering reminder.');
-      await chrome.storage.local.remove('snoozeState');
-      await triggerPrayerReminder(snoozeState.prayerKey || 'dhuhr', true, activeInfo.tabId);
-      return;
-    }
-
-    // 2. Check if a reminder is currently active
     const { activeReminder } = await chrome.storage.local.get('activeReminder');
     if (!activeReminder) return;
 
@@ -671,13 +562,6 @@ function isSameDay(d1, d2) {
          d1.getDate() === d2.getDate();
 }
 
-// Ensure snooze-check heartbeat is always registered
-try {
-  chrome.alarms.get('snooze-check', (alarm) => {
-    if (!alarm) {
-      chrome.alarms.create('snooze-check', { periodInMinutes: 1 });
-    }
-  });
-} catch (e) {}
+console.log('[Ila Salaty] Background service worker loaded');
 
 console.log('[Ila Salaty] Background service worker loaded');

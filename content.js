@@ -42,17 +42,13 @@
   window.addEventListener('message', (event) => {
     if (!event.data || typeof event.data !== 'object') return;
 
-    if (event.data.type === 'SNOOZE_LOCKSCREEN' ||
-        event.data.type === 'HIDE_LOCKSCREEN' ||
-        event.data.type === 'CLOSE_LOCKSCREEN' ||
-        (event.data.type === 'DISMISS_LOCKSCREEN' && event.data.action === 'snooze')) {
-      // Snooze or hide only cleans up overlay on this page
+    if (event.data.type === 'HIDE_LOCKSCREEN' || event.data.type === 'CLOSE_LOCKSCREEN') {
       hideLockscreen();
       return;
     }
 
     if (event.data.type === 'DISMISS_LOCKSCREEN') {
-      // User clicked 'I have prayed' -> clear reminder across all tabs and cancel snooze
+      // User clicked 'I have prayed' -> clear reminder across all tabs
       try {
         chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
       } catch (e) {}

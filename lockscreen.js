@@ -81,8 +81,6 @@
   const confirmYes = document.getElementById('confirmYes');
   const confirmCancel = document.getElementById('confirmCancel');
 
-  const snoozeBtn = document.getElementById('snoozeBtn');
-
   // ─── Timer State ───────────────────────────────────────────────────
   const TOTAL_SECONDS = lockDuration * 60;
   const CIRCUMFERENCE = 2 * Math.PI * 54; // radius = 54 from SVG
@@ -184,69 +182,6 @@
     try {
       window.close();
     } catch (e) {}
-  }
-
-  // ─── Snooze Flow ──────────────────────────────────────────────────
-
-  function executeSnooze(minutes = 5) {
-    const mins = parseInt(minutes, 10) || 5;
-    clearInterval(timerInterval);
-
-    if (snoozeBtn) {
-      snoozeBtn.disabled = true;
-      const txt = snoozeBtn.querySelector('.snooze-btn-text');
-      if (txt) txt.textContent = 'Closing... — جارٍ الإغلاق';
-    }
-
-    // 1. Send snooze reminder to background service worker
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'snoozeReminder',
-          minutes: mins,
-          prayerKey: prayerKey
-        });
-      }
-    } catch (e) {
-      console.error('[Ila Salaty] Failed to send snoozeReminder message:', e);
-    }
-
-    // 2. If embedded inside a web page iframe, instruct parent to remove overlay immediately
-    if (window !== window.parent) {
-      try {
-        window.parent.postMessage({
-          type: 'SNOOZE_LOCKSCREEN',
-          minutes: mins,
-          prayerKey: prayerKey
-        }, '*');
-        window.parent.postMessage({
-          type: 'DISMISS_LOCKSCREEN',
-          action: 'snooze',
-          minutes: mins,
-          prayerKey: prayerKey
-        }, '*');
-        window.parent.postMessage({ type: 'HIDE_LOCKSCREEN' }, '*');
-      } catch (e) {}
-    }
-
-    // 3. If opened as a standalone tab, close tab reliably via chrome.tabs API
-    try {
-      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.getCurrent) {
-        chrome.tabs.getCurrent((tab) => {
-          if (tab && tab.id) chrome.tabs.remove(tab.id);
-        });
-      }
-    } catch (e) {}
-
-    try {
-      window.close();
-    } catch (e) {}
-  }
-
-  if (snoozeBtn) {
-    snoozeBtn.addEventListener('click', () => {
-      executeSnooze(5);
-    });
   }
 
   // ─── Block right-click in the lockscreen ───────────────────────────
