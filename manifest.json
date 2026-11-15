@@ -9,7 +9,8 @@
     "tabs",
     "activeTab",
     "notifications",
-    "scripting"
+    "scripting",
+    "offscreen"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {

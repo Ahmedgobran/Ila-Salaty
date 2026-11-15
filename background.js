@@ -58,6 +58,44 @@ const DEFAULT_SETTINGS = getDefaultSettings();
 // Prayer names for alarm IDs
 const PRAYER_NAMES = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
+// ─── Offscreen Keep-Alive Document Management ───────────────────────
+
+/**
+ * Ensures an offscreen document is active to keep the service worker alive
+ * and maintain accurate prayer timing even during long idle sessions.
+ */
+async function ensureOffscreenDocument() {
+  if (!chrome.offscreen) return;
+  try {
+    if (chrome.offscreen.hasDocument) {
+      const hasDoc = await chrome.offscreen.hasDocument();
+      if (hasDoc) return;
+    }
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['BLOBS'],
+      justification: 'Keep service worker alive and maintain accurate prayer reminder timing'
+    });
+    console.log('[Ila Salaty] Offscreen keep-alive document active');
+  } catch (err) {
+    if (!err.message || !err.message.includes('Only a single offscreen document may be created')) {
+      console.warn('[Ila Salaty] Offscreen document:', err.message);
+    }
+  }
+}
+
+// ─── Persistent Connection Handler ──────────────────────────────────
+// Maintains connection with content scripts and offscreen document
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'offscreen-keepalive' || port.name === 'content-keepalive') {
+    port.onDisconnect.addListener(() => {
+      if (port.name === 'offscreen-keepalive') {
+        ensureOffscreenDocument().catch(() => {});
+      }
+    });
+  }
+});
+
 // ─── Initialization ─────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -70,15 +108,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     console.log('[Ila Salaty] Default settings saved');
   }
 
+  // Ensure offscreen document is running
+  await ensureOffscreenDocument();
+
   // Calculate and schedule prayer times
   await schedulePrayerAlarms();
-  // Set up daily recalculation
+  // Set up daily recalculation and health check
   setupDailyRecalc();
 });
 
 // Also run on service worker startup (handles browser restart)
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[Ila Salaty] Service worker started');
+  await ensureOffscreenDocument();
   await schedulePrayerAlarms();
   setupDailyRecalc();
 });
@@ -158,12 +200,12 @@ function setupDailyRecalc() {
     periodInMinutes: 24 * 60 // Repeat every 24 hours
   });
 
-  // Health check every 15 minutes to recover missed alarms on system wake/un-idle
+  // Fast health check (every 1 minute) to wake service worker, verify alarms, and guarantee zero missed prayers
   chrome.alarms.create('health-check', {
-    periodInMinutes: 15
+    periodInMinutes: 1
   });
 
-  console.log('[Ila Salaty] Alarms initialized: daily-recalc and health-check');
+  console.log('[Ila Salaty] Alarms initialized: daily-recalc and 1-minute health-check');
 }
 
 // ─── Alarm Handler ──────────────────────────────────────────────────
@@ -188,32 +230,57 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 /**
- * Health check: verify prayer times and catch missed prayers if laptop was asleep during Azan
+ * Health check: verify prayer times, wake offscreen document, and catch missed prayers on system wake/idle
  */
 async function verifyAndCatchMissedPrayers() {
   try {
-    const { settings, todaysPrayerTimes, activeReminder } = await chrome.storage.local.get(['settings', 'todaysPrayerTimes', 'activeReminder']);
+    // Keep offscreen keep-alive active
+    ensureOffscreenDocument().catch(() => {});
+
+    const { settings, todaysPrayerTimes, lastCalculated, activeReminder, lastTriggeredKey } =
+      await chrome.storage.local.get(['settings', 'todaysPrayerTimes', 'lastCalculated', 'activeReminder', 'lastTriggeredKey']);
+
     const config = settings || DEFAULT_SETTINGS;
     if (!config.enabled) return;
 
     const now = new Date();
-    // Recalculate if missing
-    if (!todaysPrayerTimes || !todaysPrayerTimes.fajr) {
+
+    // Recalculate if times missing or day rolled over
+    if (!todaysPrayerTimes || !todaysPrayerTimes.fajr || !lastCalculated || !isSameDay(new Date(lastCalculated), now)) {
+      console.log('[Ila Salaty] Day rollover or missing times detected in health check. Recalculating...');
       await schedulePrayerAlarms();
       return;
     }
 
-    // Check if a prayer occurred in the last 15 minutes that wasn't displayed
-    const currentDecimal = now.getHours() + now.getMinutes() / 60;
+    // Verify all remaining prayer alarms for today are actually active in chrome.alarms
+    const existingAlarms = await chrome.alarms.getAll();
+    const alarmNames = new Set(existingAlarms.map(a => a.name));
+    const currentDecimal = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+
+    let missingAlarmFound = false;
+    for (const name of PRAYER_NAMES) {
+      const rawTime = todaysPrayerTimes._raw?.[name];
+      if (rawTime && rawTime > currentDecimal) {
+        if (!alarmNames.has(`prayer-${name}`)) {
+          missingAlarmFound = true;
+          break;
+        }
+      }
+    }
+    if (missingAlarmFound) {
+      console.log('[Ila Salaty] Missing upcoming prayer alarm detected, recreating alarms...');
+      await schedulePrayerAlarms();
+    }
+
+    // Check if a prayer occurred in the last 15 minutes that wasn't displayed (e.g. laptop lid was closed during Azan)
     for (const name of PRAYER_NAMES) {
       const rawTime = todaysPrayerTimes._raw?.[name];
       if (rawTime) {
         const diffMinutes = (currentDecimal - rawTime) * 60;
         if (diffMinutes >= 0 && diffMinutes <= 15) {
-          const { lastTriggeredKey } = await chrome.storage.local.get('lastTriggeredKey');
           const triggerKey = `${name}-${now.toDateString()}`;
           if (lastTriggeredKey !== triggerKey && !activeReminder) {
-            console.log(`[Ila Salaty] Catching missed prayer ${name} on system wake`);
+            console.log(`[Ila Salaty] Catching missed prayer ${name} on system wake/health check`);
             await chrome.storage.local.set({ lastTriggeredKey: triggerKey });
             await triggerPrayerReminder(name);
             break;
@@ -328,15 +395,19 @@ async function triggerPrayerReminder(prayerKey, isManualTest = false, preferredT
   const prayer = prayerNames[prayerKey] || { en: prayerKey, ar: '' };
   const lockDuration = config.lockDurationMinutes || 5;
 
-  // 1. Store active reminder state
-  await chrome.storage.local.set({
+  // 1. Store active reminder state and record triggered prayer for today
+  const updateData = {
     activeReminder: {
       prayerKey,
       prayer,
       lockDuration,
       triggeredAt: now
     }
-  });
+  };
+  if (!isManualTest) {
+    updateData.lastTriggeredKey = `${prayerKey}-${new Date().toDateString()}`;
+  }
+  await chrome.storage.local.set(updateData);
 
   // 2. Show or update single system notification (Reuses NOTIFICATION_ID to prevent spamming)
   try {
@@ -519,6 +590,24 @@ async function handleMessage(message, sender) {
       return { activeReminder: activeReminder || null };
     }
 
+    case 'keepAlive': {
+      // Periodic ping from offscreen document or content script to prevent SW suspension
+      return { alive: true };
+    }
+
+    case 'triggerPrayer': {
+      // Triggered by failsafe offscreen monitor when prayer time matches system clock
+      if (message.prayerKey) {
+        const { lastTriggeredKey, activeReminder } = await chrome.storage.local.get(['lastTriggeredKey', 'activeReminder']);
+        const triggerKey = `${message.prayerKey}-${new Date().toDateString()}`;
+        if (lastTriggeredKey !== triggerKey && !activeReminder) {
+          console.log(`[Ila Salaty] Handling triggerPrayer for ${message.prayerKey}`);
+          await triggerPrayerReminder(message.prayerKey);
+        }
+      }
+      return { success: true };
+    }
+
     case 'testLockscreen': {
       // Fire-and-forget: do not block response to popup, use message.tabId if available
       triggerPrayerReminder(message.prayerKey || 'dhuhr', true, message.tabId).catch((e) => {
@@ -562,6 +651,26 @@ function isSameDay(d1, d2) {
          d1.getDate() === d2.getDate();
 }
 
-console.log('[Ila Salaty] Background service worker loaded');
+// ─── Top-Level Self-Initialization ─────────────────────────────────
+// Runs EVERY time the service worker script evaluates (startup, wakeup from dormancy, reload)
+(async function initWorker() {
+  try {
+    console.log('[Ila Salaty] Service worker initializing/waking up...');
+    await ensureOffscreenDocument();
+
+    const { settings, lastCalculated } = await chrome.storage.local.get(['settings', 'lastCalculated']);
+    if (!settings) {
+      await chrome.storage.local.set({ settings: getDefaultSettings() });
+    }
+
+    const today = new Date();
+    if (!lastCalculated || !isSameDay(new Date(lastCalculated), today)) {
+      await schedulePrayerAlarms();
+    }
+    setupDailyRecalc();
+  } catch (e) {
+    console.error('[Ila Salaty] Service worker init error:', e);
+  }
+})();
 
 console.log('[Ila Salaty] Background service worker loaded');

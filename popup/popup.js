@@ -371,19 +371,31 @@
         testBtn.disabled = true;
         testBtn.textContent = "Launching Lock Screen...";
 
+        var hasClosed = false;
+        function closePopupSafely() {
+          if (!hasClosed) {
+            hasClosed = true;
+            window.close();
+          }
+        }
+
+        // Safety fallback: ensure popup closes even if background takes time
+        setTimeout(closePopupSafely, 2000);
+
         function sendTest(tabId) {
           try {
             chrome.runtime.sendMessage({
               type: "testLockscreen",
               prayerKey: "dhuhr",
               tabId: tabId
+            }, function (response) {
+              // Wait briefly for content script injection/DOM attachment to complete
+              setTimeout(closePopupSafely, 200);
             });
           } catch (e) {
             console.error("Error sending testLockscreen message:", e);
+            setTimeout(closePopupSafely, 300);
           }
-          setTimeout(function () {
-            window.close();
-          }, 150);
         }
 
         chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (tabs) {

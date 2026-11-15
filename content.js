@@ -8,9 +8,35 @@
 (() => {
   'use strict';
 
+  // Prevent duplicate execution if script is reinjected into the same page
+  if (window.__ilaSalatyInjected) {
+    return;
+  }
+  window.__ilaSalatyInjected = true;
+
   let lockscreenOverlay = null;
   let lockscreenIframe = null;
   let isLockscreenActive = false;
+
+  // ─── Keep-Alive Port Connection ─────────────────────────────────
+  let keepAlivePort = null;
+  function connectKeepAlive() {
+    try {
+      if (!chrome.runtime || !chrome.runtime.id) return;
+      keepAlivePort = chrome.runtime.connect({ name: 'content-keepalive' });
+      keepAlivePort.onDisconnect.addListener(() => {
+        keepAlivePort = null;
+        if (chrome.runtime && chrome.runtime.id) {
+          setTimeout(connectKeepAlive, 5000);
+        }
+      });
+    } catch (e) {
+      if (chrome.runtime && chrome.runtime.id) {
+        setTimeout(connectKeepAlive, 10000);
+      }
+    }
+  }
+  connectKeepAlive();
 
   // ─── Listen for messages from background ────────────────────────────
 
