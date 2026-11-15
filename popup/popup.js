@@ -371,13 +371,12 @@
         testBtn.disabled = true;
         testBtn.textContent = "Launching Lock Screen...";
 
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-          var targetTabId = (tabs && tabs[0]) ? tabs[0].id : null;
+        function sendTest(tabId) {
           try {
             chrome.runtime.sendMessage({
               type: "testLockscreen",
               prayerKey: "dhuhr",
-              tabId: targetTabId
+              tabId: tabId
             });
           } catch (e) {
             console.error("Error sending testLockscreen message:", e);
@@ -385,6 +384,16 @@
           setTimeout(function () {
             window.close();
           }, 150);
+        }
+
+        chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (tabs) {
+          if (tabs && tabs[0]) {
+            sendTest(tabs[0].id);
+          } else {
+            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs2) {
+              sendTest((tabs2 && tabs2[0]) ? tabs2[0].id : null);
+            });
+          }
         });
       });
     }

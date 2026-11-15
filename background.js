@@ -403,7 +403,6 @@ async function triggerPrayerReminder(prayerKey, isManualTest = false, preferredT
     });
   }).catch(() => {});
 }
-}
 
 /**
  * Open a dedicated standalone lockscreen tab when current tab is restricted

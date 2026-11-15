@@ -136,9 +136,6 @@
     console.log('[Ila Salaty] Lock screen hidden');
   }
 
-    console.log('[Ila Salaty] Lock screen hidden');
-  }
-
   // ─── Keyboard Blocking ────────────────────────────────────────────
 
   function blockKeyboard(e) {
