@@ -386,9 +386,14 @@
           }, 150);
         }
 
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-          var targetTabId = (tabs && tabs[0]) ? tabs[0].id : null;
-          sendTest(targetTabId);
+        chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (tabs) {
+          if (tabs && tabs[0]) {
+            sendTest(tabs[0].id);
+          } else {
+            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs2) {
+              sendTest((tabs2 && tabs2[0]) ? tabs2[0].id : null);
+            });
+          }
         });
       });
     }

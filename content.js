@@ -42,8 +42,11 @@
   window.addEventListener('message', (event) => {
     if (!event.data || typeof event.data !== 'object') return;
 
-    if (event.data.type === 'SNOOZE_LOCKSCREEN') {
-      // Snooze only hides the overlay on this tab (snooze alarm is handled by lockscreen.js)
+    if (event.data.type === 'SNOOZE_LOCKSCREEN' ||
+        event.data.type === 'HIDE_LOCKSCREEN' ||
+        event.data.type === 'CLOSE_LOCKSCREEN' ||
+        (event.data.type === 'DISMISS_LOCKSCREEN' && event.data.action === 'snooze')) {
+      // Snooze or hide only cleans up overlay on this page
       hideLockscreen();
       return;
     }
@@ -80,12 +83,17 @@
       const iframe = document.createElement('iframe');
       const lockscreenUrl = chrome.runtime.getURL('lockscreen.html');
       
-      // Pass prayer data via URL params
+      // Pass prayer data via URL params safely
+      const pEn = (data.prayer && (data.prayer.en || data.prayer)) || 'Prayer';
+      const pAr = (data.prayer && data.prayer.ar) || 'صلاة';
+      const pKey = data.prayerKey || 'dhuhr';
+      const pDur = data.lockDuration || 5;
+
       const params = new URLSearchParams({
-        prayer: data.prayer.en,
-        prayerAr: data.prayer.ar,
-        prayerKey: data.prayerKey,
-        lockDuration: data.lockDuration || 5
+        prayer: pEn,
+        prayerAr: pAr,
+        prayerKey: pKey,
+        lockDuration: pDur
       });
       iframe.src = `${lockscreenUrl}?${params.toString()}`;
       iframe.className = 'ila-salaty-iframe';

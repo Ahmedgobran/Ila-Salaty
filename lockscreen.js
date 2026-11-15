@@ -148,7 +148,14 @@
 
   function dismissLockscreen() {
     clearInterval(timerInterval);
-    // Send message to background to clear active reminder and notification
+
+    if (dismissBtn) {
+      dismissBtn.disabled = true;
+      const txt = dismissBtn.querySelector('.dismiss-btn-text');
+      if (txt) txt.textContent = 'Closing... — جارٍ الإغلاق';
+    }
+
+    // 1. Send message to background to clear active reminder and notification
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
@@ -157,13 +164,26 @@
       console.error('[Ila Salaty] Failed to send dismissLockscreen message:', e);
     }
 
-    // If embedded inside a web page iframe:
+    // 2. If embedded inside a web page iframe, instruct parent to remove overlay
     if (window !== window.parent) {
-      window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
-    } else {
-      // If opened as a standalone tab (fallback for restricted URLs / edge://):
-      window.close();
+      try {
+        window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
+        window.parent.postMessage({ type: 'HIDE_LOCKSCREEN' }, '*');
+      } catch (e) {}
     }
+
+    // 3. If opened as a standalone tab, close tab reliably via chrome.tabs API
+    try {
+      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.getCurrent) {
+        chrome.tabs.getCurrent((tab) => {
+          if (tab && tab.id) chrome.tabs.remove(tab.id);
+        });
+      }
+    } catch (e) {}
+
+    try {
+      window.close();
+    } catch (e) {}
   }
 
   // ─── Snooze Flow ──────────────────────────────────────────────────
@@ -172,6 +192,13 @@
     const mins = parseInt(minutes, 10) || 5;
     clearInterval(timerInterval);
 
+    if (snoozeBtn) {
+      snoozeBtn.disabled = true;
+      const txt = snoozeBtn.querySelector('.snooze-btn-text');
+      if (txt) txt.textContent = 'Closing... — جارٍ الإغلاق';
+    }
+
+    // 1. Send snooze reminder to background service worker
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
@@ -184,15 +211,36 @@
       console.error('[Ila Salaty] Failed to send snoozeReminder message:', e);
     }
 
+    // 2. If embedded inside a web page iframe, instruct parent to remove overlay immediately
     if (window !== window.parent) {
-      window.parent.postMessage({
-        type: 'SNOOZE_LOCKSCREEN',
-        minutes: mins,
-        prayerKey: prayerKey
-      }, '*');
-    } else {
-      window.close();
+      try {
+        window.parent.postMessage({
+          type: 'SNOOZE_LOCKSCREEN',
+          minutes: mins,
+          prayerKey: prayerKey
+        }, '*');
+        window.parent.postMessage({
+          type: 'DISMISS_LOCKSCREEN',
+          action: 'snooze',
+          minutes: mins,
+          prayerKey: prayerKey
+        }, '*');
+        window.parent.postMessage({ type: 'HIDE_LOCKSCREEN' }, '*');
+      } catch (e) {}
     }
+
+    // 3. If opened as a standalone tab, close tab reliably via chrome.tabs API
+    try {
+      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.getCurrent) {
+        chrome.tabs.getCurrent((tab) => {
+          if (tab && tab.id) chrome.tabs.remove(tab.id);
+        });
+      }
+    } catch (e) {}
+
+    try {
+      window.close();
+    } catch (e) {}
   }
 
   if (snoozeBtn) {

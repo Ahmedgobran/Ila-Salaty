@@ -286,20 +286,11 @@ function isRestrictedUrl(url) {
  */
 async function getActiveTabSafe() {
   try {
-    // 1. Prioritize the window the user is currently focused on
-    const windows = await chrome.windows.getAll({ populate: true });
-    const focusedWin = windows.find(w => w.focused && w.type === 'normal') ||
-                       windows.find(w => w.focused) ||
-                       windows.find(w => w.type === 'normal') ||
-                       windows[0];
-
-    if (focusedWin && focusedWin.tabs) {
-      const activeTab = focusedWin.tabs.find(t => t.active);
-      if (activeTab) return activeTab;
+    // In Edge & Chrome, lastFocusedWindow gets the actual browser window the user was interacting with
+    let tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tabs || tabs.length === 0) {
+      tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     }
-
-    // 2. Fallbacks
-    let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs || tabs.length === 0) {
       tabs = await chrome.tabs.query({ active: true });
     }
@@ -311,6 +302,20 @@ async function getActiveTabSafe() {
 }
 
 /**
+ * Function injected via chrome.scripting.executeScript to unconditionally purge
+ * all Ila Salaty lockscreen elements from a web page tab
+ */
+function removeLockscreenDom() {
+  const elements = document.querySelectorAll('#ila-salaty-backdrop, #ila-salaty-overlay, .ila-salaty-backdrop, .ila-salaty-overlay');
+  elements.forEach((el) => {
+    try {
+      el.style.display = 'none';
+      el.remove();
+    } catch (e) {}
+  });
+}
+
+/**
  * Send message to a tab or dynamically inject content script if not yet loaded
  */
 async function ensureTabLocked(tabId, message) {
@@ -319,17 +324,17 @@ async function ensureTabLocked(tabId, message) {
     if (res && res.success) return true;
   } catch (e) {
     // Content script not loaded on this tab yet (e.g. tab opened before extension loaded)
-    try {
-      await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
-      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-      const res2 = await chrome.tabs.sendMessage(tabId, message);
-      return Boolean(res2 && res2.success);
-    } catch (err) {
-      console.log(`[Ila Salaty] Tab ${tabId} could not host overlay:`, err.message);
-      return false;
-    }
   }
-  return true;
+
+  try {
+    await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    const res2 = await chrome.tabs.sendMessage(tabId, message);
+    return Boolean(res2 && res2.success);
+  } catch (err) {
+    console.log(`[Ila Salaty] Tab ${tabId} could not host overlay:`, err.message);
+    return false;
+  }
 }
 
 /**
@@ -515,11 +520,32 @@ async function handleMessage(message, sender) {
         }
       } catch (e) {}
 
-      // Tell all open tabs to hide lockscreen
+      // Target sender tab directly first if available
+      const lockscreenUrlPrefix = chrome.runtime.getURL('lockscreen.html');
+      if (sender && sender.tab && sender.tab.id) {
+        if (sender.tab.url && sender.tab.url.startsWith(lockscreenUrlPrefix)) {
+          chrome.tabs.remove(sender.tab.id).catch(() => {});
+        } else {
+          chrome.tabs.sendMessage(sender.tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
+          chrome.scripting.executeScript({
+            target: { tabId: sender.tab.id },
+            func: removeLockscreenDom
+          }).catch(() => {});
+        }
+      }
+
+      // Tell all open tabs to hide lockscreen and close standalone lockscreen tabs
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
-        if (tab.id && tab.url && !isRestrictedUrl(tab.url)) {
+        if (!tab.id) continue;
+        if (tab.url && tab.url.startsWith(lockscreenUrlPrefix)) {
+          chrome.tabs.remove(tab.id).catch(() => {});
+        } else if (tab.url && !isRestrictedUrl(tab.url)) {
           chrome.tabs.sendMessage(tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: removeLockscreenDom
+          }).catch(() => {});
         }
       }
       return { success: true };
@@ -556,11 +582,32 @@ async function handleMessage(message, sender) {
 
       console.log(`[Ila Salaty] Snooze set for ${prayerKey} in ${minutes} min (target: ${new Date(snoozeWhen).toLocaleTimeString()})`);
 
-      // 4. Tell all open tabs to hide lockscreen
+      // Target sender tab directly first if available
+      const lockscreenUrlPrefix = chrome.runtime.getURL('lockscreen.html');
+      if (sender && sender.tab && sender.tab.id) {
+        if (sender.tab.url && sender.tab.url.startsWith(lockscreenUrlPrefix)) {
+          chrome.tabs.remove(sender.tab.id).catch(() => {});
+        } else {
+          chrome.tabs.sendMessage(sender.tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
+          chrome.scripting.executeScript({
+            target: { tabId: sender.tab.id },
+            func: removeLockscreenDom
+          }).catch(() => {});
+        }
+      }
+
+      // 4. Tell all open tabs to hide lockscreen and close standalone lockscreen tabs
       const tabs = await chrome.tabs.query({});
       for (const tab of tabs) {
-        if (tab.id && tab.url && !isRestrictedUrl(tab.url)) {
+        if (!tab.id) continue;
+        if (tab.url && tab.url.startsWith(lockscreenUrlPrefix)) {
+          chrome.tabs.remove(tab.id).catch(() => {});
+        } else if (tab.url && !isRestrictedUrl(tab.url)) {
           chrome.tabs.sendMessage(tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: removeLockscreenDom
+          }).catch(() => {});
         }
       }
       return { success: true, minutes: minutes };
@@ -623,5 +670,14 @@ function isSameDay(d1, d2) {
          d1.getMonth() === d2.getMonth() &&
          d1.getDate() === d2.getDate();
 }
+
+// Ensure snooze-check heartbeat is always registered
+try {
+  chrome.alarms.get('snooze-check', (alarm) => {
+    if (!alarm) {
+      chrome.alarms.create('snooze-check', { periodInMinutes: 1 });
+    }
+  });
+} catch (e) {}
 
 console.log('[Ila Salaty] Background service worker loaded');
