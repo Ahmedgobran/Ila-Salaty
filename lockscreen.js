@@ -186,12 +186,6 @@
 
     if (window !== window.parent) {
       window.parent.postMessage({
-        type: 'DISMISS_LOCKSCREEN',
-        action: 'snooze',
-        minutes: mins,
-        prayerKey: prayerKey
-      }, '*');
-      window.parent.postMessage({
         type: 'SNOOZE_LOCKSCREEN',
         minutes: mins,
         prayerKey: prayerKey
