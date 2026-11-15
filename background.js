@@ -163,7 +163,12 @@ function setupDailyRecalc() {
     periodInMinutes: 15
   });
 
-  console.log('[Ila Salaty] Alarms initialized: daily-recalc and health-check');
+  // Snooze check every 1 minute to ensure snooze is never delayed or dropped
+  chrome.alarms.create('snooze-check', {
+    periodInMinutes: 1
+  });
+
+  console.log('[Ila Salaty] Alarms initialized: daily-recalc, health-check, and snooze-check');
 }
 
 // ─── Alarm Handler ──────────────────────────────────────────────────
@@ -178,6 +183,16 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
   if (alarm.name === 'health-check') {
     await verifyAndCatchMissedPrayers();
+    return;
+  }
+
+  if (alarm.name === 'snooze-check') {
+    const { snoozeState } = await chrome.storage.local.get('snoozeState');
+    if (snoozeState && Date.now() >= snoozeState.snoozeUntil) {
+      console.log(`[Ila Salaty] Snooze-check detected elapsed snooze for ${snoozeState.prayerKey}`);
+      await chrome.storage.local.remove('snoozeState');
+      await triggerPrayerReminder(snoozeState.prayerKey || 'dhuhr', true);
+    }
     return;
   }
 
@@ -271,11 +286,20 @@ function isRestrictedUrl(url) {
  */
 async function getActiveTabSafe() {
   try {
-    // In Edge, lastFocusedWindow gets the actual browser window (not the popup bubble)
-    let tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!tabs || tabs.length === 0) {
-      tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    // 1. Prioritize the window the user is currently focused on
+    const windows = await chrome.windows.getAll({ populate: true });
+    const focusedWin = windows.find(w => w.focused && w.type === 'normal') ||
+                       windows.find(w => w.focused) ||
+                       windows.find(w => w.type === 'normal') ||
+                       windows[0];
+
+    if (focusedWin && focusedWin.tabs) {
+      const activeTab = focusedWin.tabs.find(t => t.active);
+      if (activeTab) return activeTab;
     }
+
+    // 2. Fallbacks
+    let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs || tabs.length === 0) {
       tabs = await chrome.tabs.query({ active: true });
     }
