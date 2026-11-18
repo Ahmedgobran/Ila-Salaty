@@ -76,7 +76,7 @@
   }
 
   window.addEventListener('message', event => {
-    if (!current || event.source !== current.frame.contentWindow || event.origin !== extensionOrigin) return;
+    if (!current || !current.frame || event.origin !== extensionOrigin || event.source !== current.frame.contentWindow) return;
     if (event.data?.type === 'LOCKSCREEN_READY') {
       const visible = document.elementFromPoint(innerWidth / 2, innerHeight / 2) === current.frame;
       current.finish(visible);

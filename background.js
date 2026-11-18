@@ -306,9 +306,12 @@ chrome.tabs.onActivated.addListener(({ tabId }) => inOrder(async () => {
   const { activeReminder } = await chrome.storage.local.get('activeReminder');
   if (!activeReminder || expiresAt(activeReminder) <= Date.now()) return;
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab?.active && !isRestrictedUrl(tab.url) && !await ensureTabLocked(tab, activeReminder)) {
-    if ((await chrome.tabs.get(tabId).catch(() => null))?.active) {
-      await openStandalone(tab, activeReminder);
+  if (!tab?.active) return;
+  if (tab.url?.startsWith(lockPage + '?')) return;
+  if (!await ensureTabLocked(tab, activeReminder)) {
+    const current = await chrome.tabs.get(tabId).catch(() => null);
+    if (current?.active) {
+      await openStandalone(current, activeReminder);
     }
   }
 }));
