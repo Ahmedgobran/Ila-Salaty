@@ -9,159 +9,105 @@
   'use strict';
 
   // Prevent duplicate execution if script is reinjected into the same page
-  if (window.__ilaSalatyInjected) {
+  if (window.__ilaSalatyReminderController) {
     return;
   }
-  window.__ilaSalatyInjected = true;
+  window.__ilaSalatyReminderController = true;
 
-  let lockscreenOverlay = null;
-  let lockscreenIframe = null;
+  let current = null;
   let isLockscreenActive = false;
-
-  // ─── Keep-Alive Port Connection ─────────────────────────────────
-  let keepAlivePort = null;
-  function connectKeepAlive() {
-    try {
-      if (!chrome.runtime || !chrome.runtime.id) return;
-      keepAlivePort = chrome.runtime.connect({ name: 'content-keepalive' });
-      keepAlivePort.onDisconnect.addListener(() => {
-        keepAlivePort = null;
-        if (chrome.runtime && chrome.runtime.id) {
-          setTimeout(connectKeepAlive, 5000);
-        }
-      });
-    } catch (e) {
-      if (chrome.runtime && chrome.runtime.id) {
-        setTimeout(connectKeepAlive, 10000);
-      }
-    }
-  }
-  connectKeepAlive();
-
-  // ─── Listen for messages from background ────────────────────────────
-
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'SHOW_LOCKSCREEN') {
-      try {
-        showLockscreen(message);
-        sendResponse({ success: true });
-      } catch (err) {
-        console.error('[Ila Salaty] Content script failed to show lockscreen:', err);
-        sendResponse({ success: false, error: err.message });
-      }
-      return false;
-    }
-
-    if (message.type === 'HIDE_LOCKSCREEN') {
-      try {
-        hideLockscreen();
-        sendResponse({ success: true });
-      } catch (err) {
-        sendResponse({ success: false });
-      }
-      return false;
-    }
-  });
-
-  // ─── Listen for messages from the lockscreen iframe ─────────────────
-
-  window.addEventListener('message', (event) => {
-    if (!event.data || typeof event.data !== 'object') return;
-
-    if (event.data.type === 'HIDE_LOCKSCREEN' || event.data.type === 'CLOSE_LOCKSCREEN') {
-      hideLockscreen();
-      return;
-    }
-
-    if (event.data.type === 'DISMISS_LOCKSCREEN') {
-      // User clicked 'I have prayed' -> clear reminder across all tabs
-      try {
-        chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
-      } catch (e) {}
-      hideLockscreen();
-    }
-  });
-
-  // ─── Show Lock Screen ─────────────────────────────────────────────
-
-  function showLockscreen(data) {
-    // Check if already displayed
-    if (document.getElementById('ila-salaty-overlay')) return;
-
-    try {
-      isLockscreenActive = true;
-
-      // Create backdrop
-      const backdrop = document.createElement('div');
-      backdrop.id = 'ila-salaty-backdrop';
-      backdrop.className = 'ila-salaty-backdrop';
-
-      // Create iframe container
-      const container = document.createElement('div');
-      container.id = 'ila-salaty-overlay';
-      container.className = 'ila-salaty-overlay';
-
-      // Create iframe pointing to our lockscreen page
-      const iframe = document.createElement('iframe');
-      const lockscreenUrl = chrome.runtime.getURL('lockscreen.html');
-      
-      // Pass prayer data via URL params safely
-      const pEn = (data.prayer && (data.prayer.en || data.prayer)) || 'Prayer';
-      const pAr = (data.prayer && data.prayer.ar) || 'صلاة';
-      const pKey = data.prayerKey || 'dhuhr';
-      const pDur = data.lockDuration || 5;
-
-      const params = new URLSearchParams({
-        prayer: pEn,
-        prayerAr: pAr,
-        prayerKey: pKey,
-        lockDuration: pDur
-      });
-      iframe.src = `${lockscreenUrl}?${params.toString()}`;
-      iframe.className = 'ila-salaty-iframe';
-      iframe.setAttribute('allowtransparency', 'true');
-      iframe.setAttribute('frameborder', '0');
-
-      container.appendChild(iframe);
-      document.documentElement.appendChild(backdrop);
-      document.documentElement.appendChild(container);
-
-      lockscreenOverlay = container;
-      lockscreenIframe = iframe;
-
-      // Pause any playing media on the page
-      pauseAllMedia();
-
-      // Block keyboard shortcuts while lockscreen is active
-      document.addEventListener('keydown', blockKeyboard, true);
-
-      console.log('[Ila Salaty] Lock screen shown');
-    } catch (err) {
-      isLockscreenActive = false;
-      throw err;
-    }
-  }
-
-  // ─── Hide Lock Screen ─────────────────────────────────────────────
+  const extensionOrigin = new URL(chrome.runtime.getURL('lockscreen.html')).origin;
 
   function hideLockscreen() {
+    if (!current) return;
+    current.finish(false);
+    current.dialog.remove();
+    current = null;
     isLockscreenActive = false;
-
-    // Immediately hide and remove all lockscreen elements
-    const elements = document.querySelectorAll('.ila-salaty-overlay, .ila-salaty-backdrop, #ila-salaty-overlay, #ila-salaty-backdrop');
-    elements.forEach((el) => {
-      try {
-        el.style.display = 'none';
-        el.remove();
-      } catch (e) {}
-    });
-
     document.removeEventListener('keydown', blockKeyboard, true);
-    lockscreenOverlay = null;
-    lockscreenIframe = null;
-
-    console.log('[Ila Salaty] Lock screen hidden');
   }
+
+  function showLockscreen(reminder) {
+    if (current?.id === reminder.triggeredAt && (current.mounting || current.dialog.isConnected)) {
+      return current.ready.then(ok => ok && document.elementFromPoint(innerWidth / 2, innerHeight / 2) === current?.frame);
+    }
+    hideLockscreen();
+    const dialog = document.createElement('dialog');
+    dialog.id = 'ila-salaty-overlay';
+    dialog.className = 'ila-salaty-overlay';
+    dialog.setAttribute('aria-label', reminder.prayer.en + ' prayer reminder');
+    dialog.addEventListener('cancel', event => event.preventDefault());
+
+    const frame = document.createElement('iframe');
+    frame.className = 'ila-salaty-iframe';
+    frame.title = reminder.prayer.en + ' prayer reminder';
+    const params = new URLSearchParams({
+      prayerKey: reminder.prayerKey, lockDuration: reminder.lockDuration,
+      triggeredAt: reminder.triggeredAt
+    });
+    frame.src = chrome.runtime.getURL('lockscreen.html') + '?' + params;
+
+    let finish;
+    const ready = new Promise(resolve => { finish = resolve; });
+    const entry = { id: reminder.triggeredAt, dialog, frame, ready, finish, mounting: true };
+    current = entry;
+    // A blocked or unloaded iframe must yield to the standalone reminder.
+    const timeout = setTimeout(() => finish(false), 2000);
+    ready.then(ok => {
+      clearTimeout(timeout);
+      if (!ok && current === entry) hideLockscreen();
+    });
+    async function mount() {
+      // A fullscreen video may live in another origin's iframe.
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => {});
+      }
+      if (current !== entry) return;
+      dialog.appendChild(frame);
+      document.documentElement.appendChild(dialog);
+      dialog.showModal();
+      entry.mounting = false;
+      isLockscreenActive = true;
+      pauseAllMedia();
+      document.addEventListener('keydown', blockKeyboard, true);
+    }
+    mount().catch(() => finish(false));
+    return ready;
+  }
+
+  window.addEventListener('message', event => {
+    if (!current || event.source !== current.frame.contentWindow || event.origin !== extensionOrigin) return;
+    if (event.data?.type === 'LOCKSCREEN_READY') {
+      const visible = document.elementFromPoint(innerWidth / 2, innerHeight / 2) === current.frame;
+      current.finish(visible);
+    } else if (event.data?.type === 'DISMISS_LOCKSCREEN') {
+      chrome.runtime.sendMessage({ type: 'dismissLockscreen', triggeredAt: current.id }).catch(() => {});
+      hideLockscreen();
+    }
+  });
+
+  function sync(reminder) {
+    if (!reminder || reminder.triggeredAt + reminder.lockDuration * 60000 <= Date.now()) {
+      hideLockscreen();
+      return false;
+    }
+    return showLockscreen(reminder);
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (message.type !== 'SHOW_LOCKSCREEN') return;
+    chrome.storage.local.get('activeReminder').then(async ({ activeReminder }) => {
+      const success = activeReminder?.triggeredAt === message.triggeredAt && await sync(activeReminder);
+      reply({ success });
+    }).catch(() => reply({ success: false }));
+    return true;
+  });
+
+  // The same stored session drives existing tabs, new pages, and dismissal.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.activeReminder) sync(changes.activeReminder.newValue);
+  });
+  chrome.storage.local.get('activeReminder').then(({ activeReminder }) => sync(activeReminder)).catch(() => {});
 
   // ─── Keyboard Blocking ────────────────────────────────────────────
 
@@ -221,30 +167,5 @@
       }
     });
   }
-
-  // ─── Check for active reminder on page load ──────────────────────
-  // If the user opens a new tab during a prayer reminder, show it there too
-
-  (async function checkActiveReminder() {
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'getActiveReminder' });
-      if (response && response.activeReminder) {
-        const reminder = response.activeReminder;
-        const elapsed = (Date.now() - reminder.triggeredAt) / 1000 / 60;
-        
-        const duration = reminder.lockDuration || 5;
-        // Only show if the reminder is less than the lock duration old
-        if (elapsed < duration) {
-          showLockscreen({
-            prayer: reminder.prayer,
-            prayerKey: reminder.prayerKey,
-            lockDuration: duration - Math.floor(elapsed) // Remaining time
-          });
-        }
-      }
-    } catch (e) {
-      // Extension context may not be ready yet
-    }
-  })();
 
 })();

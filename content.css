@@ -2,7 +2,7 @@
  * Ila Salaty — Content Script Styles
  * 
  * Styles for the lock screen overlay injected into web pages.
- * Uses extreme z-index to stay on top of all page content.
+ * The modal dialog occupies the browser top layer.
  */
 
 /* ─── Fade-in Animation ──────────────────────────────────────────── */
@@ -25,23 +25,16 @@
   }
 }
 
-/* ─── Backdrop ───────────────────────────────────────────────────── */
-
-.ila-salaty-backdrop {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  background: rgba(0, 0, 0, 0.85) !important;
-  z-index: 2147483646 !important;
-  animation: ilaSalatyFadeIn 0.5s ease-out !important;
-  pointer-events: all !important;
-}
-
 /* ─── Overlay Container ──────────────────────────────────────────── */
 
 .ila-salaty-overlay {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;

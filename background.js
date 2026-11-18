@@ -58,245 +58,100 @@ const DEFAULT_SETTINGS = getDefaultSettings();
 // Prayer names for alarm IDs
 const PRAYER_NAMES = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
-// ─── Offscreen Keep-Alive Document Management ───────────────────────
-
-/**
- * Ensures an offscreen document is active to keep the service worker alive
- * and maintain accurate prayer timing even during long idle sessions.
- */
-async function ensureOffscreenDocument() {
-  if (!chrome.offscreen) return;
-  try {
-    if (chrome.offscreen.hasDocument) {
-      const hasDoc = await chrome.offscreen.hasDocument();
-      if (hasDoc) return;
-    }
-    await chrome.offscreen.createDocument({
-      url: 'offscreen.html',
-      reasons: ['BLOBS'],
-      justification: 'Keep service worker alive and maintain accurate prayer reminder timing'
-    });
-    console.log('[Ila Salaty] Offscreen keep-alive document active');
-  } catch (err) {
-    if (!err.message || !err.message.includes('Only a single offscreen document may be created')) {
-      console.warn('[Ila Salaty] Offscreen document:', err.message);
-    }
-  }
-}
-
-// ─── Persistent Connection Handler ──────────────────────────────────
-// Maintains connection with content scripts and offscreen document
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === 'offscreen-keepalive' || port.name === 'content-keepalive') {
-    port.onDisconnect.addListener(() => {
-      if (port.name === 'offscreen-keepalive') {
-        ensureOffscreenDocument().catch(() => {});
-      }
-    });
-  }
-});
-
-// ─── Initialization ─────────────────────────────────────────────────
-
-chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('[Ila Salaty] Extension installed/updated:', details.reason);
-
-  // Initialize settings if first install or missing
-  const { settings } = await chrome.storage.local.get('settings');
-  if (!settings) {
-    await chrome.storage.local.set({ settings: getDefaultSettings() });
-    console.log('[Ila Salaty] Default settings saved');
-  }
-
-  // Ensure offscreen document is running
-  await ensureOffscreenDocument();
-
-  // Calculate and schedule prayer times
-  await schedulePrayerAlarms();
-  // Set up daily recalculation and health check
-  setupDailyRecalc();
-});
-
-// Also run on service worker startup (handles browser restart)
-chrome.runtime.onStartup.addListener(async () => {
-  console.log('[Ila Salaty] Service worker started');
-  await ensureOffscreenDocument();
-  await schedulePrayerAlarms();
-  setupDailyRecalc();
-});
-
-// ─── Alarm Scheduling ───────────────────────────────────────────────
-
-/**
- * Calculate today's prayer times and set alarms for each one
- */
-async function schedulePrayerAlarms() {
-  const { settings } = await chrome.storage.local.get('settings');
-  const config = settings || DEFAULT_SETTINGS;
-
-  if (!config.enabled) {
-    console.log('[Ila Salaty] Extension disabled, skipping alarm scheduling');
-    await chrome.alarms.clearAll();
-    setupDailyRecalc(); // Keep recalc alive
-    return;
-  }
-
-  const now = new Date();
-  const prayerTimes = calculatePrayerTimes(
-    now,
-    config.latitude,
-    config.longitude,
-    config.calculationMethod
-  );
-
-  // Store calculated times for quick access by popup/content scripts
-  await chrome.storage.local.set({
-    todaysPrayerTimes: prayerTimes,
-    lastCalculated: now.toISOString()
-  });
-
-  console.log('[Ila Salaty] Prayer times calculated:', prayerTimes);
-
-  // Clear existing prayer alarms (not the recalc alarm)
-  for (const name of PRAYER_NAMES) {
-    await chrome.alarms.clear(`prayer-${name}`);
-  }
-
-  // Set alarms for prayers that haven't passed yet
-  const currentDecimal = now.getHours() + now.getMinutes() / 60;
-
-  for (const name of PRAYER_NAMES) {
-    const rawTime = prayerTimes._raw[name];
-    if (!isNaN(rawTime) && rawTime > currentDecimal) {
-      // Calculate milliseconds until this prayer
-      const prayerDate = new Date(now);
-      const hours = Math.floor(rawTime);
-      const minutes = Math.round((rawTime - hours) * 60);
-      prayerDate.setHours(hours, minutes, 0, 0);
-
-      const delayMs = prayerDate.getTime() - now.getTime();
-      if (delayMs > 0) {
-        chrome.alarms.create(`prayer-${name}`, {
-          when: prayerDate.getTime()
-        });
-        console.log(`[Ila Salaty] Alarm set for ${name} at ${prayerTimes[name].formatted} (in ${Math.round(delayMs / 60000)} min)`);
-      }
-    }
-  }
-}
-
-/**
- * Set up the daily midnight recalculation alarm and 15-min health check
- */
-function setupDailyRecalc() {
-  // Calculate time until next midnight
-  const now = new Date();
-  const midnight = new Date(now);
-  midnight.setDate(midnight.getDate() + 1);
-  midnight.setHours(0, 1, 0, 0); // 00:01 to be safe
-
-  chrome.alarms.create('daily-recalc', {
-    when: midnight.getTime(),
-    periodInMinutes: 24 * 60 // Repeat every 24 hours
-  });
-
-  // Fast health check (every 1 minute) to wake service worker, verify alarms, and guarantee zero missed prayers
-  chrome.alarms.create('health-check', {
-    periodInMinutes: 1
-  });
-
-  console.log('[Ila Salaty] Alarms initialized: daily-recalc and 1-minute health-check');
-}
-
-// ─── Alarm Handler ──────────────────────────────────────────────────
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  console.log('[Ila Salaty] Alarm fired:', alarm.name);
-
-  if (alarm.name === 'daily-recalc') {
-    await schedulePrayerAlarms();
-    return;
-  }
-
-  if (alarm.name === 'health-check') {
-    await verifyAndCatchMissedPrayers();
-    return;
-  }
-
-  if (alarm.name.startsWith('prayer-')) {
-    const prayerKey = alarm.name.replace('prayer-', '');
-    await triggerPrayerReminder(prayerKey);
-  }
-});
-
-/**
- * Health check: verify prayer times, wake offscreen document, and catch missed prayers on system wake/idle
- */
-async function verifyAndCatchMissedPrayers() {
-  try {
-    // Keep offscreen keep-alive active
-    ensureOffscreenDocument().catch(() => {});
-
-    const { settings, todaysPrayerTimes, lastCalculated, activeReminder, lastTriggeredKey } =
-      await chrome.storage.local.get(['settings', 'todaysPrayerTimes', 'lastCalculated', 'activeReminder', 'lastTriggeredKey']);
-
-    const config = settings || DEFAULT_SETTINGS;
-    if (!config.enabled) return;
-
-    const now = new Date();
-
-    // Recalculate if times missing or day rolled over
-    if (!todaysPrayerTimes || !todaysPrayerTimes.fajr || !lastCalculated || !isSameDay(new Date(lastCalculated), now)) {
-      console.log('[Ila Salaty] Day rollover or missing times detected in health check. Recalculating...');
-      await schedulePrayerAlarms();
-      return;
-    }
-
-    // Verify all remaining prayer alarms for today are actually active in chrome.alarms
-    const existingAlarms = await chrome.alarms.getAll();
-    const alarmNames = new Set(existingAlarms.map(a => a.name));
-    const currentDecimal = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-
-    let missingAlarmFound = false;
-    for (const name of PRAYER_NAMES) {
-      const rawTime = todaysPrayerTimes._raw?.[name];
-      if (rawTime && rawTime > currentDecimal) {
-        if (!alarmNames.has(`prayer-${name}`)) {
-          missingAlarmFound = true;
-          break;
-        }
-      }
-    }
-    if (missingAlarmFound) {
-      console.log('[Ila Salaty] Missing upcoming prayer alarm detected, recreating alarms...');
-      await schedulePrayerAlarms();
-    }
-
-    // Check if a prayer occurred in the last 15 minutes that wasn't displayed (e.g. laptop lid was closed during Azan)
-    for (const name of PRAYER_NAMES) {
-      const rawTime = todaysPrayerTimes._raw?.[name];
-      if (rawTime) {
-        const diffMinutes = (currentDecimal - rawTime) * 60;
-        if (diffMinutes >= 0 && diffMinutes <= 15) {
-          const triggerKey = `${name}-${now.toDateString()}`;
-          if (lastTriggeredKey !== triggerKey && !activeReminder) {
-            console.log(`[Ila Salaty] Catching missed prayer ${name} on system wake/health check`);
-            await chrome.storage.local.set({ lastTriggeredKey: triggerKey });
-            await triggerPrayerReminder(name);
-            break;
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[Ila Salaty] Error in health check:', e);
-  }
-}
-
-// ─── Prayer Reminder Execution ──────────────────────────────────────
-
 const NOTIFICATION_ID = 'ila-salaty-prayer-reminder';
-let lastTriggerTime = 0;
+const PRAYERS = {
+  fajr: { en: 'Fajr', ar: 'الفجر' },
+  dhuhr: { en: 'Dhuhr', ar: 'الظهر' },
+  asr: { en: 'Asr', ar: 'العصر' },
+  maghrib: { en: 'Maghrib', ar: 'المغرب' },
+  isha: { en: 'Isha', ar: 'العشاء' }
+};
+
+// Alarm callbacks, startup, settings changes and dismissals can arrive together.
+let pending = Promise.resolve();
+function inOrder(work) {
+  const result = pending.then(work);
+  pending = result.catch(error => console.error('[Ila Salaty]', error));
+  return result;
+}
+
+function scheduleFor(day, config) {
+  const times = calculatePrayerTimes(day, config.latitude, config.longitude, config.calculationMethod);
+  const events = [];
+  for (const name of PRAYER_NAMES) {
+    if (!times[name].valid) continue;
+    const date = new Date(day);
+    date.setHours(times[name].hour, times[name].minute, 0, 0);
+    events.push({ name, when: date.getTime(), key: name + '-' + date.toDateString() });
+  }
+  return { times, events };
+}
+
+function onDay(today, offset) {
+  const day = new Date(today);
+  day.setDate(day.getDate() + offset);
+  return day;
+}
+
+async function reconcile(resetBaseline = false) {
+  const state = await chrome.storage.local.get([
+    'settings', 'lastPrayerCheck', 'lastTriggeredKey', 'lastCalculated', 'activeReminder',
+    'todaysPrayerTimes', 'scheduleTimezone'
+  ]);
+  const config = state.settings || DEFAULT_SETTINGS;
+  if (!state.settings) await chrome.storage.local.set({ settings: config });
+
+  const now = new Date();
+  const nowMs = now.getTime();
+  const today = scheduleFor(now, config);
+  if (resetBaseline || !state.todaysPrayerTimes || state.scheduleTimezone !== now.getTimezoneOffset()
+      || new Date(state.lastCalculated).toDateString() !== now.toDateString()) {
+    await chrome.storage.local.set({
+      todaysPrayerTimes: today.times, lastCalculated: now.toISOString(), scheduleTimezone: now.getTimezoneOffset()
+    });
+  }
+
+  const alarms = new Map((await chrome.alarms.getAll()).map(alarm => [alarm.name, alarm]));
+  if (!alarms.has('health-check')) {
+    await chrome.alarms.create('health-check', { periodInMinutes: 1 });
+  }
+  if (alarms.has('daily-recalc')) await chrome.alarms.clear('daily-recalc');
+  const upcoming = today.events.concat(scheduleFor(onDay(now, 1), config).events);
+  for (const name of PRAYER_NAMES) {
+    const id = 'prayer-' + name;
+    const next = config.enabled && upcoming.find(event => event.name === name && event.when > nowMs);
+    if (next && alarms.get(id)?.scheduledTime !== next.when) {
+      await chrome.alarms.create(id, { when: next.when });
+    } else if (!next && alarms.has(id)) {
+      await chrome.alarms.clear(id);
+    }
+  }
+
+  // A fresh installation or a new schedule starts tracking from now.
+  let since = nowMs;
+  if (!resetBaseline) {
+    // v1.0.0 had no checkpoint. Preserve its short catch-up window on upgrade.
+    const baseline = state.lastCalculated ? nowMs - 15 * 60000 : nowMs;
+    since = state.lastPrayerCheck ?? baseline;
+  }
+  let events = today.events;
+  if (new Date(since).toDateString() !== now.toDateString()) {
+    events = events.concat(scheduleFor(onDay(now, -1), config).events);
+  }
+  const due = events.filter(event => event.when > since && event.when <= nowMs)
+    .sort((a, b) => b.when - a.when)[0];
+
+  if (config.enabled && due && due.key !== state.lastTriggeredKey) {
+    await present(due.name, config, due.key);
+  } else if (state.activeReminder && expiresAt(state.activeReminder) <= nowMs) {
+    await dismiss();
+  }
+  await chrome.storage.local.set({ lastPrayerCheck: nowMs });
+}
+
+function expiresAt(reminder) {
+  return reminder.triggeredAt + reminder.lockDuration * 60000;
+}
 
 function isRestrictedUrl(url) {
   if (!url) return true;
@@ -331,346 +186,132 @@ async function getActiveTabSafe() {
   }
 }
 
-/**
- * Function injected via chrome.scripting.executeScript to unconditionally purge
- * all Ila Salaty lockscreen elements from a web page tab
- */
-function removeLockscreenDom() {
-  const elements = document.querySelectorAll('#ila-salaty-backdrop, #ila-salaty-overlay, .ila-salaty-backdrop, .ila-salaty-overlay');
-  elements.forEach((el) => {
-    try {
-      el.style.display = 'none';
-      el.remove();
-    } catch (e) {}
-  });
+// Bound the wait even for a frozen tab that accepts a message but never answers.
+async function withTimeout(task, ms) {
+  let timer;
+  try {
+    return await Promise.race([task, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Tab did not respond')), ms);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-/**
- * Send message to a tab or dynamically inject content script if not yet loaded
- */
-async function ensureTabLocked(tabId, message) {
+async function ensureTabLocked(tab, reminder) {
+  if (tab?.id == null || isRestrictedUrl(tab.url) || tab.discarded) return false;
+  const message = { type: 'SHOW_LOCKSCREEN', triggeredAt: reminder.triggeredAt };
+  const send = () => chrome.tabs.sendMessage(tab.id, message, { frameId: 0 });
   try {
-    const res = await chrome.tabs.sendMessage(tabId, message);
-    if (res && res.success) return true;
-  } catch (e) {
-    // Content script not loaded on this tab yet (e.g. tab opened before extension loaded)
+    return (await withTimeout(send(), 3500))?.success === true;
+  } catch (error) {
+    if (!/receiving end does not exist/i.test(error.message)) return false;
   }
-
   try {
-    await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    const res2 = await chrome.tabs.sendMessage(tabId, message);
-    return Boolean(res2 && res2.success);
-  } catch (err) {
-    console.log(`[Ila Salaty] Tab ${tabId} could not host overlay:`, err.message);
+    await withTimeout((async () => {
+      await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content.css'] });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+    })(), 2500);
+    return (await withTimeout(send(), 3500))?.success === true;
+  } catch {
     return false;
   }
 }
 
-/**
- * Trigger the prayer reminder across tabs with standalone fallback
- */
-async function triggerPrayerReminder(prayerKey, isManualTest = false, preferredTabId = null) {
-  const now = Date.now();
-  // Debounce: prevent frantic multi-clicks within 1 second
-  if (now - lastTriggerTime < 1000) {
-    console.log('[Ila Salaty] Reminder trigger debounced');
-    return;
+const lockPage = chrome.runtime.getURL('lockscreen.html');
+async function openStandalone(tab, reminder) {
+  const params = new URLSearchParams({
+    prayerKey: reminder.prayerKey, lockDuration: reminder.lockDuration,
+    triggeredAt: reminder.triggeredAt, standalone: true
+  });
+  const url = lockPage + '?' + params;
+  const existing = (await chrome.tabs.query({})).find(t =>
+    t.url?.startsWith(lockPage + '?') && (!tab || tab.windowId === t.windowId));
+  if (existing) {
+    await chrome.tabs.update(existing.id, { url, active: true });
+  } else {
+    await chrome.tabs.create({ url, active: true, ...(tab && { windowId: tab.windowId }) });
   }
-  lastTriggerTime = now;
+}
 
-  const { settings } = await chrome.storage.local.get('settings');
-  const config = settings || DEFAULT_SETTINGS;
-
-  if (!config.enabled && !isManualTest) return;
-
-  const prayerNames = {
-    fajr: { en: 'Fajr', ar: 'الفجر' },
-    dhuhr: { en: 'Dhuhr', ar: 'الظهر' },
-    asr: { en: 'Asr', ar: 'العصر' },
-    maghrib: { en: 'Maghrib', ar: 'المغرب' },
-    isha: { en: 'Isha', ar: 'العشاء' }
+async function present(name, config, occurrence, tabId) {
+  const reminder = {
+    prayerKey: name, prayer: PRAYERS[name], lockDuration: config.lockDurationMinutes || 5,
+    triggeredAt: Date.now()
   };
+  await chrome.storage.local.set({ activeReminder: reminder });
+  // Desktop notification permissions and fullscreen presentation are independent.
+  chrome.notifications.create(NOTIFICATION_ID, {
+    type: 'basic', iconUrl: 'icons/icon128.png',
+    title: `🕌 ${reminder.prayer.en} Prayer Time — حان وقت صلاة ${reminder.prayer.ar}`,
+    message: 'It is time to pray. Leave what you are doing and respond to the call.',
+    priority: 2, requireInteraction: true
+  }).catch(error => console.warn('[Ila Salaty] Notification:', error.message));
 
-  const prayer = prayerNames[prayerKey] || { en: prayerKey, ar: '' };
-  const lockDuration = config.lockDurationMinutes || 5;
+  const tab = (tabId != null && await chrome.tabs.get(tabId).catch(() => null)) || await getActiveTabSafe();
+  if (!await ensureTabLocked(tab, reminder)) await openStandalone(tab, reminder);
+  if (occurrence) await chrome.storage.local.set({ lastTriggeredKey: occurrence });
+}
 
-  // 1. Store active reminder state and record triggered prayer for today
-  const updateData = {
-    activeReminder: {
-      prayerKey,
-      prayer,
-      lockDuration,
-      triggeredAt: now
+async function dismiss() {
+  await chrome.storage.local.remove(['activeReminder', 'snoozeState']);
+  await chrome.notifications.clear(NOTIFICATION_ID).catch(() => {});
+  // Content scripts remove their own overlays when the stored reminder clears.
+  for (const tab of await chrome.tabs.query({})) {
+    if (tab.url?.startsWith(lockPage + '?')) {
+      await chrome.tabs.remove(tab.id).catch(() => {});
     }
-  };
-  if (!isManualTest) {
-    updateData.lastTriggeredKey = `${prayerKey}-${new Date().toDateString()}`;
   }
-  await chrome.storage.local.set(updateData);
+}
 
-  // 2. Show or update single system notification (Reuses NOTIFICATION_ID to prevent spamming)
-  try {
-    chrome.notifications.create(NOTIFICATION_ID, {
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: `🕌 ${prayer.en} Prayer Time — حان وقت صلاة ${prayer.ar}`,
-      message: 'It is time to pray. Leave what you are doing and respond to the call.',
-      priority: 2,
-      requireInteraction: true
-    });
-  } catch (e) {
-    console.log('[Ila Salaty] Notification error:', e.message);
-  }
+chrome.alarms.onAlarm.addListener(() => inOrder(() => reconcile()));
+chrome.runtime.onStartup.addListener(() => inOrder(() => reconcile()));
+chrome.runtime.onInstalled.addListener(() => inOrder(() => reconcile()));
 
-  const message = {
-    type: 'SHOW_LOCKSCREEN',
-    prayer: prayer,
-    prayerKey: prayerKey,
-    lockDuration: lockDuration
-  };
-
-  // 3. TARGET ACTIVE TAB FIRST (prioritize preferredTabId from popup if available)
-  let activeTab = null;
-  if (preferredTabId) {
-    try {
-      activeTab = await chrome.tabs.get(preferredTabId);
-    } catch (e) {}
-  }
-  if (!activeTab || !activeTab.id) {
-    activeTab = await getActiveTabSafe();
-  }
-
-  let activeTabSucceeded = false;
-  try {
-    if (activeTab && activeTab.id) {
-      if (!activeTab.url || isRestrictedUrl(activeTab.url) || activeTab.discarded) {
-        // Active tab is restricted (edge://, chrome://, new tab, discarded)
-        console.log('[Ila Salaty] Active tab is restricted. Opening standalone tab.');
-        await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
-        activeTabSucceeded = true;
-      } else {
-        const ok = await ensureTabLocked(activeTab.id, message);
-        if (ok) {
-          activeTabSucceeded = true;
-        } else {
-          console.log('[Ila Salaty] Overlay could not be injected on active tab. Opening standalone tab.');
-          await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
-          activeTabSucceeded = true;
-        }
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  inOrder(async () => {
+    switch (message.type) {
+      case 'getPrayerTimes': {
+        await reconcile();
+        const { todaysPrayerTimes } = await chrome.storage.local.get('todaysPrayerTimes');
+        return { prayerTimes: todaysPrayerTimes, nextPrayer: getNextPrayer(todaysPrayerTimes) };
       }
-    } else {
-      await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
-      activeTabSucceeded = true;
+      case 'getSettings': {
+        const { settings } = await chrome.storage.local.get('settings');
+        return { settings: settings || DEFAULT_SETTINGS };
+      }
+      case 'updateSettings': {
+        await chrome.storage.local.set({ settings: message.settings });
+        await reconcile(true);
+        return { success: true };
+      }
+      case 'dismissLockscreen': {
+        const { activeReminder } = await chrome.storage.local.get('activeReminder');
+        if (activeReminder && activeReminder.triggeredAt === message.triggeredAt) await dismiss();
+        return { success: true };
+      }
+      case 'testLockscreen': {
+        const { settings } = await chrome.storage.local.get('settings');
+        await present(message.prayerKey in PRAYERS ? message.prayerKey : 'dhuhr',
+          settings || DEFAULT_SETTINGS, null, message.tabId);
+        return { success: true };
+      }
+      default: return { error: 'Unknown message type' };
     }
-  } catch (err) {
-    console.error('[Ila Salaty] Error handling active tab:', err);
-    await openStandaloneLockscreenTab(prayer, prayerKey, lockDuration);
-  }
-
-  // 4. Notify all other open tabs in parallel
-  chrome.tabs.query({}).then((tabs) => {
-    tabs.forEach((tab) => {
-      if (!tab.id || tab.id === activeTab?.id || !tab.url || isRestrictedUrl(tab.url) || tab.discarded) return;
-      ensureTabLocked(tab.id, message).catch(() => {});
-    });
-  }).catch(() => {});
-}
-
-/**
- * Open a dedicated standalone lockscreen tab when current tab is restricted
- */
-async function openStandaloneLockscreenTab(prayer, prayerKey, lockDuration) {
-  try {
-    const lockscreenUrlPrefix = chrome.runtime.getURL('lockscreen.html');
-    const existingTabs = await chrome.tabs.query({});
-    const existingLockTab = existingTabs.find(t => t.url && t.url.startsWith(lockscreenUrlPrefix));
-    if (existingLockTab && existingLockTab.id) {
-      await chrome.tabs.update(existingLockTab.id, { active: true });
-      return;
-    }
-
-    const url = `${lockscreenUrlPrefix}?prayer=${encodeURIComponent(prayer.en)}&prayerAr=${encodeURIComponent(prayer.ar)}&prayerKey=${prayerKey}&lockDuration=${lockDuration}&standalone=true`;
-    await chrome.tabs.create({ url, active: true });
-  } catch (e) {
-    console.error('[Ila Salaty] Error opening standalone lockscreen tab:', e);
-  }
-}
-
-// ─── Message Handler ────────────────────────────────────────────────
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sender).then(sendResponse);
-  return true; // Keep the message channel open for async response
+  }).then(reply, error => reply({ error: error.message }));
+  return true;
 });
 
-async function handleMessage(message, sender) {
-  switch (message.type) {
-    case 'getPrayerTimes': {
-      const { todaysPrayerTimes, lastCalculated } = await chrome.storage.local.get(['todaysPrayerTimes', 'lastCalculated']);
-      
-      // Recalculate if we don't have times or they're from a different day
-      if (!todaysPrayerTimes || !lastCalculated || !isSameDay(new Date(lastCalculated), new Date())) {
-        await schedulePrayerAlarms();
-        const fresh = await chrome.storage.local.get('todaysPrayerTimes');
-        const nextPrayer = getNextPrayer(fresh.todaysPrayerTimes);
-        return { prayerTimes: fresh.todaysPrayerTimes, nextPrayer };
-      }
-
-      const nextPrayer = getNextPrayer(todaysPrayerTimes);
-      return { prayerTimes: todaysPrayerTimes, nextPrayer };
+chrome.tabs.onActivated.addListener(({ tabId }) => inOrder(async () => {
+  const { activeReminder } = await chrome.storage.local.get('activeReminder');
+  if (!activeReminder || expiresAt(activeReminder) <= Date.now()) return;
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (tab?.active && !isRestrictedUrl(tab.url) && !await ensureTabLocked(tab, activeReminder)) {
+    if ((await chrome.tabs.get(tabId).catch(() => null))?.active) {
+      await openStandalone(tab, activeReminder);
     }
-
-    case 'getSettings': {
-      const { settings } = await chrome.storage.local.get('settings');
-      return { settings: settings || DEFAULT_SETTINGS };
-    }
-
-    case 'updateSettings': {
-      const newSettings = message.settings;
-      await chrome.storage.local.set({ settings: newSettings });
-      // Recalculate prayer times with new settings
-      await schedulePrayerAlarms();
-      return { success: true };
-    }
-
-    case 'dismissLockscreen': {
-      // Clear active reminder and snooze state
-      await chrome.storage.local.remove(['activeReminder', 'snoozeState']);
-
-      // Clear the persistent system notification
-      try {
-        chrome.notifications.clear(NOTIFICATION_ID);
-      } catch (e) {}
-
-      // Clear any pending snooze alarms since the user has prayed
-      try {
-        const allAlarms = await chrome.alarms.getAll();
-        for (const a of allAlarms) {
-          if (a.name.startsWith('snooze-')) {
-            await chrome.alarms.clear(a.name);
-            console.log(`[Ila Salaty] Dismissed snooze alarm: ${a.name}`);
-          }
-        }
-      } catch (e) {}
-
-      // Target sender tab directly first if available
-      const lockscreenUrlPrefix = chrome.runtime.getURL('lockscreen.html');
-      if (sender && sender.tab && sender.tab.id) {
-        if (sender.tab.url && sender.tab.url.startsWith(lockscreenUrlPrefix)) {
-          chrome.tabs.remove(sender.tab.id).catch(() => {});
-        } else {
-          chrome.tabs.sendMessage(sender.tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
-          chrome.scripting.executeScript({
-            target: { tabId: sender.tab.id },
-            func: removeLockscreenDom
-          }).catch(() => {});
-        }
-      }
-
-      // Tell all open tabs to hide lockscreen and close standalone lockscreen tabs
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (!tab.id) continue;
-        if (tab.url && tab.url.startsWith(lockscreenUrlPrefix)) {
-          chrome.tabs.remove(tab.id).catch(() => {});
-        } else if (tab.url && !isRestrictedUrl(tab.url)) {
-          chrome.tabs.sendMessage(tab.id, { type: 'HIDE_LOCKSCREEN' }).catch(() => {});
-          chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: removeLockscreenDom
-          }).catch(() => {});
-        }
-      }
-      return { success: true };
-    }
-
-    case 'getActiveReminder': {
-      const { activeReminder } = await chrome.storage.local.get('activeReminder');
-      return { activeReminder: activeReminder || null };
-    }
-
-    case 'keepAlive': {
-      // Periodic ping from offscreen document or content script to prevent SW suspension
-      return { alive: true };
-    }
-
-    case 'triggerPrayer': {
-      // Triggered by failsafe offscreen monitor when prayer time matches system clock
-      if (message.prayerKey) {
-        const { lastTriggeredKey, activeReminder } = await chrome.storage.local.get(['lastTriggeredKey', 'activeReminder']);
-        const triggerKey = `${message.prayerKey}-${new Date().toDateString()}`;
-        if (lastTriggeredKey !== triggerKey && !activeReminder) {
-          console.log(`[Ila Salaty] Handling triggerPrayer for ${message.prayerKey}`);
-          await triggerPrayerReminder(message.prayerKey);
-        }
-      }
-      return { success: true };
-    }
-
-    case 'testLockscreen': {
-      // Fire-and-forget: do not block response to popup, use message.tabId if available
-      triggerPrayerReminder(message.prayerKey || 'dhuhr', true, message.tabId).catch((e) => {
-        console.error('[Ila Salaty] Error in testLockscreen:', e);
-      });
-      return { success: true };
-    }
-
-    default:
-      return { error: 'Unknown message type' };
   }
-}
+}));
 
-// ─── Active Tab Switching Handler ───────────────────────────────────
-// When user switches tabs while reminder is active, immediately lock that tab too
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  try {
-    const { activeReminder } = await chrome.storage.local.get('activeReminder');
-    if (!activeReminder) return;
-
-    const elapsed = (Date.now() - activeReminder.triggeredAt) / 1000 / 60;
-    const remaining = (activeReminder.lockDuration || 5) - Math.floor(elapsed);
-    if (remaining <= 0) return;
-
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (!tab || !tab.url || isRestrictedUrl(tab.url) || tab.discarded) return;
-
-    const message = {
-      type: 'SHOW_LOCKSCREEN',
-      prayer: activeReminder.prayer,
-      prayerKey: activeReminder.prayerKey,
-      lockDuration: remaining
-    };
-    await ensureTabLocked(tab.id, message);
-  } catch (e) {}
-});
-
-function isSameDay(d1, d2) {
-  return d1.getFullYear() === d2.getFullYear() &&
-         d1.getMonth() === d2.getMonth() &&
-         d1.getDate() === d2.getDate();
-}
-
-// ─── Top-Level Self-Initialization ─────────────────────────────────
-// Runs EVERY time the service worker script evaluates (startup, wakeup from dormancy, reload)
-(async function initWorker() {
-  try {
-    console.log('[Ila Salaty] Service worker initializing/waking up...');
-    await ensureOffscreenDocument();
-
-    const { settings, lastCalculated } = await chrome.storage.local.get(['settings', 'lastCalculated']);
-    if (!settings) {
-      await chrome.storage.local.set({ settings: getDefaultSettings() });
-    }
-
-    const today = new Date();
-    if (!lastCalculated || !isSameDay(new Date(lastCalculated), today)) {
-      await schedulePrayerAlarms();
-    }
-    setupDailyRecalc();
-  } catch (e) {
-    console.error('[Ila Salaty] Service worker init error:', e);
-  }
-})();
-
-console.log('[Ila Salaty] Background service worker loaded');
+// Repair missing alarms whenever Chrome starts a fresh worker.
+inOrder(() => reconcile());

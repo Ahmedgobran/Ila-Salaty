@@ -15,6 +15,9 @@
   const prayerKey = params.get('prayerKey') || 'dhuhr';
   const lockDuration = parseInt(params.get('lockDuration') || '5', 10);
 
+  const triggeredAt = Number(params.get('triggeredAt')) || Date.now();
+  const deadline = triggeredAt + lockDuration * 60000;
+
   // ─── Prayer name mapping ──────────────────────────────────────────
   const prayerData = {
     fajr:    { ar: 'الفجر',   en: 'Fajr Prayer' },
@@ -84,7 +87,7 @@
   // ─── Timer State ───────────────────────────────────────────────────
   const TOTAL_SECONDS = lockDuration * 60;
   const CIRCUMFERENCE = 2 * Math.PI * 54; // radius = 54 from SVG
-  let remainingSeconds = TOTAL_SECONDS;
+  let remainingSeconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
   let timerInterval = null;
 
   // ─── Start Timer ───────────────────────────────────────────────────
@@ -94,7 +97,7 @@
     updateTimerRing();
 
     timerInterval = setInterval(() => {
-      remainingSeconds--;
+      remainingSeconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
 
       if (remainingSeconds <= 0) {
         clearInterval(timerInterval);
@@ -153,34 +156,10 @@
       if (txt) txt.textContent = 'Closing... — جارٍ الإغلاق';
     }
 
-    // 1. Send message to background to clear active reminder and notification
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({ type: 'dismissLockscreen' });
-      }
-    } catch (e) {
-      console.error('[Ila Salaty] Failed to send dismissLockscreen message:', e);
-    }
-
-    // 2. If embedded inside a web page iframe, instruct parent to remove overlay only
     if (window !== window.parent) {
-      try {
-        window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
-        window.parent.postMessage({ type: 'HIDE_LOCKSCREEN' }, '*');
-      } catch (e) {}
+      window.parent.postMessage({ type: 'DISMISS_LOCKSCREEN' }, '*');
     } else {
-      // 3. Only if opened as a dedicated standalone tab (e.g. for restricted edge:// pages)
-      try {
-        if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.getCurrent) {
-          chrome.tabs.getCurrent((tab) => {
-            if (tab && tab.id) chrome.tabs.remove(tab.id);
-          });
-        }
-      } catch (e) {}
-
-      try {
-        window.close();
-      } catch (e) {}
+      chrome.runtime.sendMessage({ type: 'dismissLockscreen', triggeredAt }).catch(() => {});
     }
   }
 
@@ -201,7 +180,24 @@
     }
   });
 
+  // A previous standalone reminder can still be open in another window after sleep.
+  if (window === window.parent && params.get('standalone') === 'true') {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.activeReminder) return;
+      const next = changes.activeReminder.newValue;
+      if (next && next.triggeredAt !== triggeredAt) {
+        params.set('prayerKey', next.prayerKey);
+        params.set('triggeredAt', next.triggeredAt);
+        params.set('lockDuration', next.lockDuration);
+        location.replace('?' + params);
+      }
+    });
+  }
+
   // ─── Start ─────────────────────────────────────────────────────────
   startTimer();
+  if (window !== window.parent) {
+    window.parent.postMessage({ type: 'LOCKSCREEN_READY' }, '*');
+  }
 
 })();
