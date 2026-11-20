@@ -25,7 +25,6 @@
   const citySearchResults = document.getElementById("citySearchResults");
   const toggleCoordsBtn = document.getElementById("toggleCoordsBtn");
   const manualCoordsPanel = document.getElementById("manualCoordsPanel");
-  const calcMethodSelect = document.getElementById("calcMethod");
   const lockscreenToggle = document.getElementById("lockscreenToggle");
   const soundToggle = document.getElementById("soundToggle");
   const volumeSlider = document.getElementById("volumeSlider");
@@ -73,32 +72,27 @@
       day: "numeric"
     });
 
-    // Approximate Hijri date
+    // Initial Hijri date estimation (overwritten with authentic API Hijri date when prayer times load)
     dateHijriEl.textContent = formatHijriDate(now);
   }
 
   /**
-   * Approximate Hijri date conversion.
-   * Uses a simple algorithmic approximation — not perfectly accurate
-   * but sufficient for display purposes.
+   * Approximate Hijri date fallback conversion when API Hijri date is not yet loaded.
    */
   function formatHijriDate(date) {
     try {
-      // Use Intl if available (modern Chrome supports it)
       return new Intl.DateTimeFormat("ar-SA-u-ca-islamic", {
         day: "numeric",
         month: "long",
         year: "numeric"
       }).format(date);
     } catch (e) {
-      // Fallback: rough approximation
       return approximateHijri(date);
     }
   }
 
   function approximateHijri(date) {
-    // Approximate algorithm: days since Islamic epoch
-    var epoch = new Date(622, 6, 16); // July 16, 622 CE (approximate)
+    var epoch = new Date(622, 6, 16);
     var diff = date.getTime() - epoch.getTime();
     var days = Math.floor(diff / 86400000);
     var hijriYear = Math.floor((30 * days + 10646) / 10631);
@@ -128,8 +122,61 @@
     });
   }
 
+  function getNextPrayer(prayerTimes, referenceDate) {
+    if (!prayerTimes) return null;
+    var now = referenceDate || new Date();
+    var currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    var prayers = [
+      { key: "fajr",    name: "Fajr",    nameArabic: "الفجر" },
+      { key: "dhuhr",   name: "Dhuhr",   nameArabic: "الظهر" },
+      { key: "asr",     name: "Asr",     nameArabic: "العصر" },
+      { key: "maghrib", name: "Maghrib", nameArabic: "المغرب" },
+      { key: "isha",    name: "Isha",    nameArabic: "العشاء" }
+    ];
+
+    for (var i = 0; i < prayers.length; i++) {
+      var prayer = prayers[i];
+      var timeObj = prayerTimes[prayer.key];
+      if (!timeObj || timeObj.valid === false || timeObj.hour === undefined) continue;
+      var prayerMinutes = timeObj.hour * 60 + timeObj.minute;
+      if (prayerMinutes > currentMinutes) {
+        var minutesUntil = prayerMinutes - currentMinutes;
+        return {
+          key: prayer.key,
+          name: prayer.name,
+          nameArabic: prayer.nameArabic,
+          time: timeObj,
+          minutesUntil: minutesUntil,
+          timeRemaining: minutesUntil
+        };
+      }
+    }
+
+    // All prayers today have passed — next is Fajr tomorrow
+    var fajrObj = prayerTimes.fajr;
+    var fajrMinutes = fajrObj ? (fajrObj.hour * 60 + fajrObj.minute) : (5 * 60);
+    var remainingUntilFajr = (24 * 60 - currentMinutes) + fajrMinutes;
+    return {
+      key: "fajr",
+      name: "Fajr",
+      nameArabic: "الفجر",
+      time: fajrObj,
+      minutesUntil: remainingUntilFajr,
+      timeRemaining: remainingUntilFajr,
+      tomorrow: true
+    };
+  }
+
   // --- Display Prayer Times ---
   function displayPrayerTimes(times, nextPrayer) {
+    if (!times) return;
+
+    // Display authentic Hijri date from Aladhan API if available
+    if (times.hijri && times.hijri.formatted && dateHijriEl) {
+      dateHijriEl.textContent = times.hijri.formatted;
+    }
+
     // Update each prayer time
     var prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
     for (var i = 0; i < prayers.length; i++) {
@@ -137,23 +184,10 @@
       if (times[key] && prayerTimeEls[key]) {
         prayerTimeEls[key].textContent = times[key].formatted || formatTimeObj(times[key]);
       }
-      // Clear previous highlight
-      if (prayerRows[key]) {
-        prayerRows[key].classList.remove("is-next");
-      }
     }
 
-    // Highlight next prayer
-    var nextKey = nextPrayer ? (nextPrayer.key || (nextPrayer.name && nextPrayer.name.toLowerCase())) : null;
-    if (nextKey && prayerRows[nextKey]) {
-      prayerRows[nextKey].classList.add("is-next");
-    }
-
-    // Start countdown to next prayer
-    var remainingMinutes = nextPrayer ? (nextPrayer.timeRemaining !== undefined ? nextPrayer.timeRemaining : nextPrayer.minutesUntil) : null;
-    if (remainingMinutes !== null && remainingMinutes !== undefined) {
-      startNextPrayerCountdown(remainingMinutes);
-    }
+    // Start live countdown to next prayer and highlight active row
+    startNextPrayerCountdown(times);
   }
 
   function formatTimeObj(t) {
@@ -167,29 +201,42 @@
   }
 
   // --- Next Prayer Countdown ---
-  function startNextPrayerCountdown(initialMinutes) {
+  function startNextPrayerCountdown(times) {
     if (countdownInterval) clearInterval(countdownInterval);
 
-    var remaining = initialMinutes;
-
-    function updateCountdown() {
-      if (remaining <= 0) {
-        nextCountdownEl.textContent = "Now!";
-        clearInterval(countdownInterval);
+    function update() {
+      var next = getNextPrayer(times);
+      if (!next) {
+        if (nextCountdownEl) nextCountdownEl.textContent = "--";
         return;
       }
-      var hours = Math.floor(remaining / 60);
-      var mins = Math.round(remaining % 60);
-      if (hours > 0) {
-        nextCountdownEl.textContent = hours + "h " + mins + "m";
-      } else {
-        nextCountdownEl.textContent = mins + "m";
+
+      // Highlight next prayer row
+      for (var k in prayerRows) {
+        if (prayerRows[k]) prayerRows[k].classList.remove("is-next");
       }
-      remaining--;
+      if (prayerRows[next.key]) {
+        prayerRows[next.key].classList.add("is-next");
+      }
+
+      var mins = next.minutesUntil;
+      if (mins <= 0) {
+        if (nextCountdownEl) nextCountdownEl.textContent = "Now!";
+        return;
+      }
+      var hours = Math.floor(mins / 60);
+      var m = mins % 60;
+      if (nextCountdownEl) {
+        if (hours > 0) {
+          nextCountdownEl.textContent = hours + "h " + m + "m";
+        } else {
+          nextCountdownEl.textContent = m + "m";
+        }
+      }
     }
 
-    updateCountdown();
-    countdownInterval = setInterval(updateCountdown, 60000); // every minute
+    update();
+    countdownInterval = setInterval(update, 30000);
   }
 
   // --- Load Settings from background ---
@@ -205,156 +252,132 @@
     });
   }
 
-  // --- Comprehensive Famous Cities & Timezone Coordinates Database ---
+  // --- Comprehensive Famous Cities Coordinates Database ---
   var FAMOUS_CITIES = [
-    { name: "Shah Alam, Malaysia", lat: 3.0738, lng: 101.5183, tz: 8, method: "JAKIM" },
-    { name: "Kuala Lumpur, Malaysia", lat: 3.1390, lng: 101.6869, tz: 8, method: "JAKIM" },
-    { name: "Petaling Jaya, Malaysia", lat: 3.1073, lng: 101.6067, tz: 8, method: "JAKIM" },
-    { name: "Johor Bahru, Malaysia", lat: 1.4927, lng: 103.7414, tz: 8, method: "JAKIM" },
-    { name: "Penang, Malaysia", lat: 5.4164, lng: 100.3327, tz: 8, method: "JAKIM" },
-    { name: "Singapore", lat: 1.3521, lng: 103.8198, tz: 8, method: "Singapore" },
-    { name: "Jakarta, Indonesia", lat: -6.2088, lng: 106.8456, tz: 7, method: "MWL" },
-    { name: "Surabaya, Indonesia", lat: -7.2575, lng: 112.7521, tz: 7, method: "MWL" },
-    { name: "Bandung, Indonesia", lat: -6.9175, lng: 107.6191, tz: 7, method: "MWL" },
-    { name: "Mecca, Saudi Arabia", lat: 21.4225, lng: 39.8262, tz: 3, method: "Makkah" },
-    { name: "Medina, Saudi Arabia", lat: 24.5247, lng: 39.5692, tz: 3, method: "Makkah" },
-    { name: "Riyadh, Saudi Arabia", lat: 24.7136, lng: 46.6753, tz: 3, method: "Makkah" },
-    { name: "Jeddah, Saudi Arabia", lat: 21.5433, lng: 39.1728, tz: 3, method: "Makkah" },
-    { name: "Cairo, Egypt", lat: 30.0444, lng: 31.2357, tz: 2, method: "Egypt" },
-    { name: "Alexandria, Egypt", lat: 31.2001, lng: 29.9187, tz: 2, method: "Egypt" },
-    { name: "Dubai, UAE", lat: 25.2048, lng: 55.2708, tz: 4, method: "Dubai" },
-    { name: "Abu Dhabi, UAE", lat: 24.4539, lng: 54.3773, tz: 4, method: "Dubai" },
-    { name: "Doha, Qatar", lat: 25.2854, lng: 51.5310, tz: 3, method: "MWL" },
-    { name: "Kuwait City, Kuwait", lat: 29.3759, lng: 47.9774, tz: 3, method: "MWL" },
-    { name: "Manama, Bahrain", lat: 26.2285, lng: 50.5860, tz: 3, method: "MWL" },
-    { name: "Muscat, Oman", lat: 23.5880, lng: 58.3829, tz: 4, method: "MWL" },
-    { name: "Amman, Jordan", lat: 31.9454, lng: 35.9284, tz: 3, method: "MWL" },
-    { name: "Jerusalem, Palestine", lat: 31.7683, lng: 35.2137, tz: 2, method: "MWL" },
-    { name: "Beirut, Lebanon", lat: 33.8938, lng: 35.5018, tz: 2, method: "MWL" },
-    { name: "Damascus, Syria", lat: 33.5138, lng: 36.2765, tz: 3, method: "MWL" },
-    { name: "Baghdad, Iraq", lat: 33.3152, lng: 44.3661, tz: 3, method: "MWL" },
-    { name: "Casablanca, Morocco", lat: 33.5731, lng: -7.5898, tz: 1, method: "MWL" },
-    { name: "Rabat, Morocco", lat: 34.0209, lng: -6.8416, tz: 1, method: "MWL" },
-    { name: "Tunis, Tunisia", lat: 36.8065, lng: 10.1815, tz: 1, method: "MWL" },
-    { name: "Algiers, Algeria", lat: 36.7538, lng: 3.0588, tz: 1, method: "MWL" },
-    { name: "Tripoli, Libya", lat: 32.8872, lng: 13.1913, tz: 2, method: "MWL" },
-    { name: "Khartoum, Sudan", lat: 15.5007, lng: 32.5599, tz: 2, method: "Egypt" },
-    { name: "Istanbul, Turkey", lat: 41.0082, lng: 28.9784, tz: 3, method: "Diyanet" },
-    { name: "Ankara, Turkey", lat: 39.9334, lng: 32.8597, tz: 3, method: "Diyanet" },
-    { name: "Karachi, Pakistan", lat: 24.8607, lng: 67.0011, tz: 5, method: "Karachi" },
-    { name: "Lahore, Pakistan", lat: 31.5204, lng: 74.3587, tz: 5, method: "Karachi" },
-    { name: "Islamabad, Pakistan", lat: 33.6844, lng: 73.0479, tz: 5, method: "Karachi" },
-    { name: "Dhaka, Bangladesh", lat: 23.8103, lng: 90.4125, tz: 6, method: "Karachi" },
-    { name: "New Delhi, India", lat: 28.6139, lng: 77.2090, tz: 5.5, method: "Karachi" },
-    { name: "Mumbai, India", lat: 19.0760, lng: 72.8777, tz: 5.5, method: "Karachi" },
-    { name: "London, United Kingdom", lat: 51.5074, lng: -0.1278, tz: 0, method: "MWL" },
-    { name: "Paris, France", lat: 48.8566, lng: 2.3522, tz: 1, method: "MWL" },
-    { name: "Berlin, Germany", lat: 52.5200, lng: 13.4050, tz: 1, method: "MWL" },
-    { name: "New York, USA", lat: 40.7128, lng: -74.0060, tz: -5, method: "ISNA" },
-    { name: "Chicago, USA", lat: 41.8781, lng: -87.6298, tz: -6, method: "ISNA" },
-    { name: "Los Angeles, USA", lat: 34.0522, lng: -118.2437, tz: -8, method: "ISNA" },
-    { name: "Toronto, Canada", lat: 43.6532, lng: -79.3832, tz: -5, method: "ISNA" },
-    { name: "Sydney, Australia", lat: -33.8688, lng: 151.2093, tz: 10, method: "MWL" },
-    { name: "Melbourne, Australia", lat: -37.8136, lng: 144.9631, tz: 10, method: "MWL" }
+    { name: "Shah Alam, Malaysia", lat: 3.0738, lng: 101.5183 },
+    { name: "Kuala Lumpur, Malaysia", lat: 3.1390, lng: 101.6869 },
+    { name: "Petaling Jaya, Malaysia", lat: 3.1073, lng: 101.6067 },
+    { name: "Johor Bahru, Malaysia", lat: 1.4927, lng: 103.7414 },
+    { name: "Penang, Malaysia", lat: 5.4164, lng: 100.3327 },
+    { name: "Singapore", lat: 1.3521, lng: 103.8198 },
+    { name: "Jakarta, Indonesia", lat: -6.2088, lng: 106.8456 },
+    { name: "Surabaya, Indonesia", lat: -7.2575, lng: 112.7521 },
+    { name: "Bandung, Indonesia", lat: -6.9175, lng: 107.6191 },
+    { name: "Mecca, Saudi Arabia", lat: 21.4225, lng: 39.8262 },
+    { name: "Medina, Saudi Arabia", lat: 24.5247, lng: 39.5692 },
+    { name: "Riyadh, Saudi Arabia", lat: 24.7136, lng: 46.6753 },
+    { name: "Jeddah, Saudi Arabia", lat: 21.5433, lng: 39.1728 },
+    { name: "Cairo, Egypt", lat: 30.0444, lng: 31.2357 },
+    { name: "Alexandria, Egypt", lat: 31.2001, lng: 29.9187 },
+    { name: "Dubai, UAE", lat: 25.2048, lng: 55.2708 },
+    { name: "Abu Dhabi, UAE", lat: 24.4539, lng: 54.3773 },
+    { name: "Doha, Qatar", lat: 25.2854, lng: 51.5310 },
+    { name: "Kuwait City, Kuwait", lat: 29.3759, lng: 47.9774 },
+    { name: "Manama, Bahrain", lat: 26.2285, lng: 50.5860 },
+    { name: "Muscat, Oman", lat: 23.5880, lng: 58.3829 },
+    { name: "Amman, Jordan", lat: 31.9454, lng: 35.9284 },
+    { name: "Jerusalem, Palestine", lat: 31.7683, lng: 35.2137 },
+    { name: "Beirut, Lebanon", lat: 33.8938, lng: 35.5018 },
+    { name: "Damascus, Syria", lat: 33.5138, lng: 36.2765 },
+    { name: "Baghdad, Iraq", lat: 33.3152, lng: 44.3661 },
+    { name: "Casablanca, Morocco", lat: 33.5731, lng: -7.5898 },
+    { name: "Rabat, Morocco", lat: 34.0209, lng: -6.8416 },
+    { name: "Tunis, Tunisia", lat: 36.8065, lng: 10.1815 },
+    { name: "Algiers, Algeria", lat: 36.7538, lng: 3.0588 },
+    { name: "Tripoli, Libya", lat: 32.8872, lng: 13.1913 },
+    { name: "Khartoum, Sudan", lat: 15.5007, lng: 32.5599 },
+    { name: "Istanbul, Turkey", lat: 41.0082, lng: 28.9784 },
+    { name: "Ankara, Turkey", lat: 39.9334, lng: 32.8597 },
+    { name: "Karachi, Pakistan", lat: 24.8607, lng: 67.0011 },
+    { name: "Lahore, Pakistan", lat: 31.5204, lng: 74.3587 },
+    { name: "Islamabad, Pakistan", lat: 33.6844, lng: 73.0479 },
+    { name: "Dhaka, Bangladesh", lat: 23.8103, lng: 90.4125 },
+    { name: "New Delhi, India", lat: 28.6139, lng: 77.2090 },
+    { name: "Mumbai, India", lat: 19.0760, lng: 72.8777 },
+    { name: "London, United Kingdom", lat: 51.5074, lng: -0.1278 },
+    { name: "Paris, France", lat: 48.8566, lng: 2.3522 },
+    { name: "Berlin, Germany", lat: 52.5200, lng: 13.4050 },
+    { name: "New York, USA", lat: 40.7128, lng: -74.0060 },
+    { name: "Chicago, USA", lat: 41.8781, lng: -87.6298 },
+    { name: "Los Angeles, USA", lat: 34.0522, lng: -118.2437 },
+    { name: "Toronto, Canada", lat: 43.6532, lng: -79.3832 },
+    { name: "Tokyo, Japan", lat: 35.6762, lng: 139.6503 },
+    { name: "Sydney, Australia", lat: -33.8688, lng: 151.2093 },
+    { name: "Melbourne, Australia", lat: -37.8136, lng: 144.9631 }
   ];
 
   var TIMEZONE_LOCATIONS = {
     // Saudi Arabia & Gulf
-    "Asia/Riyadh": { lat: 24.7136, lng: 46.6753, name: "Riyadh", method: "Makkah", tz: 3 },
-    "Asia/Dubai": { lat: 25.2048, lng: 55.2708, name: "Dubai", method: "Dubai", tz: 4 },
-    "Asia/Kuwait": { lat: 29.3759, lng: 47.9774, name: "Kuwait City", method: "MWL", tz: 3 },
-    "Asia/Doha": { lat: 25.2854, lng: 51.5310, name: "Doha", method: "MWL", tz: 3 },
-    "Asia/Bahrain": { lat: 26.2285, lng: 50.5860, name: "Manama", method: "MWL", tz: 3 },
-    "Asia/Muscat": { lat: 23.5880, lng: 58.3829, name: "Muscat", method: "MWL", tz: 4 },
-    "Asia/Baghdad": { lat: 33.3152, lng: 44.3661, name: "Baghdad", method: "MWL", tz: 3 },
+    "Asia/Riyadh": { lat: 24.7136, lng: 46.6753, name: "Riyadh" },
+    "Asia/Dubai": { lat: 25.2048, lng: 55.2708, name: "Dubai" },
+    "Asia/Kuwait": { lat: 29.3759, lng: 47.9774, name: "Kuwait City" },
+    "Asia/Doha": { lat: 25.2854, lng: 51.5310, name: "Doha" },
+    "Asia/Bahrain": { lat: 26.2285, lng: 50.5860, name: "Manama" },
+    "Asia/Muscat": { lat: 23.5880, lng: 58.3829, name: "Muscat" },
+    "Asia/Baghdad": { lat: 33.3152, lng: 44.3661, name: "Baghdad" },
 
     // Levant & Egypt
-    "Africa/Cairo": { lat: 30.0444, lng: 31.2357, name: "Cairo", method: "Egypt", tz: 2 },
-    "Asia/Amman": { lat: 31.9454, lng: 35.9284, name: "Amman", method: "MWL", tz: 3 },
-    "Asia/Jerusalem": { lat: 31.7683, lng: 35.2137, name: "Jerusalem", method: "MWL", tz: 2 },
-    "Asia/Beirut": { lat: 33.8938, lng: 35.5018, name: "Beirut", method: "MWL", tz: 2 },
-    "Asia/Damascus": { lat: 33.5138, lng: 36.2765, name: "Damascus", method: "MWL", tz: 3 },
+    "Africa/Cairo": { lat: 30.0444, lng: 31.2357, name: "Cairo" },
+    "Asia/Amman": { lat: 31.9454, lng: 35.9284, name: "Amman" },
+    "Asia/Jerusalem": { lat: 31.7683, lng: 35.2137, name: "Jerusalem" },
+    "Asia/Beirut": { lat: 33.8938, lng: 35.5018, name: "Beirut" },
+    "Asia/Damascus": { lat: 33.5138, lng: 36.2765, name: "Damascus" },
 
     // North Africa
-    "Africa/Casablanca": { lat: 33.5731, lng: -7.5898, name: "Casablanca", method: "MWL", tz: 1 },
-    "Africa/Tunis": { lat: 36.8065, lng: 10.1815, name: "Tunis", method: "MWL", tz: 1 },
-    "Africa/Algiers": { lat: 36.7538, lng: 3.0588, name: "Algiers", method: "MWL", tz: 1 },
-    "Africa/Tripoli": { lat: 32.8872, lng: 13.1913, name: "Tripoli", method: "MWL", tz: 2 },
-    "Africa/Khartoum": { lat: 15.5007, lng: 32.5599, name: "Khartoum", method: "Egypt", tz: 2 },
+    "Africa/Casablanca": { lat: 33.5731, lng: -7.5898, name: "Casablanca" },
+    "Africa/Tunis": { lat: 36.8065, lng: 10.1815, name: "Tunis" },
+    "Africa/Algiers": { lat: 36.7538, lng: 3.0588, name: "Algiers" },
+    "Africa/Tripoli": { lat: 32.8872, lng: 13.1913, name: "Tripoli" },
+    "Africa/Khartoum": { lat: 15.5007, lng: 32.5599, name: "Khartoum" },
 
     // South & Southeast Asia
-    "Asia/Kuala_Lumpur": { lat: 3.1390, lng: 101.6869, name: "Kuala Lumpur", method: "JAKIM", tz: 8 },
-    "Asia/Singapore": { lat: 1.3521, lng: 103.8198, name: "Singapore", method: "Singapore", tz: 8 },
-    "Asia/Jakarta": { lat: -6.2088, lng: 106.8456, name: "Jakarta", method: "MWL", tz: 7 },
-    "Asia/Makassar": { lat: -5.1477, lng: 119.4327, name: "Makassar", method: "MWL", tz: 8 },
-    "Asia/Karachi": { lat: 24.8607, lng: 67.0011, name: "Karachi", method: "Karachi", tz: 5 },
-    "Asia/Dhaka": { lat: 23.8103, lng: 90.4125, name: "Dhaka", method: "Karachi", tz: 6 },
-    "Asia/Kolkata": { lat: 28.6139, lng: 77.2090, name: "New Delhi", method: "Karachi", tz: 5.5 },
-    "Asia/Colombo": { lat: 6.9271, lng: 79.8612, name: "Colombo", method: "Karachi", tz: 5.5 },
-    "Asia/Tashkent": { lat: 41.2995, lng: 69.2401, name: "Tashkent", method: "MWL", tz: 5 },
-    "Asia/Baku": { lat: 40.4093, lng: 49.8671, name: "Baku", method: "MWL", tz: 4 },
+    "Asia/Kuala_Lumpur": { lat: 3.1390, lng: 101.6869, name: "Kuala Lumpur" },
+    "Asia/Singapore": { lat: 1.3521, lng: 103.8198, name: "Singapore" },
+    "Asia/Jakarta": { lat: -6.2088, lng: 106.8456, name: "Jakarta" },
+    "Asia/Makassar": { lat: -5.1477, lng: 119.4327, name: "Makassar" },
+    "Asia/Karachi": { lat: 24.8607, lng: 67.0011, name: "Karachi" },
+    "Asia/Dhaka": { lat: 23.8103, lng: 90.4125, name: "Dhaka" },
+    "Asia/Kolkata": { lat: 28.6139, lng: 77.2090, name: "New Delhi" },
+    "Asia/Colombo": { lat: 6.9271, lng: 79.8612, name: "Colombo" },
+    "Asia/Tashkent": { lat: 41.2995, lng: 69.2401, name: "Tashkent" },
+    "Asia/Baku": { lat: 40.4093, lng: 49.8671, name: "Baku" },
 
     // Turkey & Europe
-    "Europe/Istanbul": { lat: 41.0082, lng: 28.9784, name: "Istanbul", method: "Diyanet", tz: 3 },
-    "Europe/London": { lat: 51.5074, lng: -0.1278, name: "London", method: "MWL", tz: 0 },
-    "Europe/Paris": { lat: 48.8566, lng: 2.3522, name: "Paris", method: "MWL", tz: 1 },
-    "Europe/Berlin": { lat: 52.5200, lng: 13.4050, name: "Berlin", method: "MWL", tz: 1 },
-    "Europe/Madrid": { lat: 40.4168, lng: -3.7038, name: "Madrid", method: "MWL", tz: 1 },
-    "Europe/Rome": { lat: 41.9028, lng: 12.4964, name: "Rome", method: "MWL", tz: 1 },
-    "Europe/Amsterdam": { lat: 52.3676, lng: 4.9041, name: "Amsterdam", method: "MWL", tz: 1 },
-    "Europe/Brussels": { lat: 50.8503, lng: 4.3517, name: "Brussels", method: "MWL", tz: 1 },
-    "Europe/Vienna": { lat: 48.2082, lng: 16.3738, name: "Vienna", method: "MWL", tz: 1 },
-    "Europe/Stockholm": { lat: 59.3293, lng: 18.0686, name: "Stockholm", method: "MWL", tz: 1 },
-    "Europe/Oslo": { lat: 59.9139, lng: 10.7522, name: "Oslo", method: "MWL", tz: 1 },
-    "Europe/Moscow": { lat: 55.7558, lng: 37.6173, name: "Moscow", method: "MWL", tz: 3 },
+    "Europe/Istanbul": { lat: 41.0082, lng: 28.9784, name: "Istanbul" },
+    "Europe/London": { lat: 51.5074, lng: -0.1278, name: "London" },
+    "Europe/Paris": { lat: 48.8566, lng: 2.3522, name: "Paris" },
+    "Europe/Berlin": { lat: 52.5200, lng: 13.4050, name: "Berlin" },
+    "Europe/Madrid": { lat: 40.4168, lng: -3.7038, name: "Madrid" },
+    "Europe/Rome": { lat: 41.9028, lng: 12.4964, name: "Rome" },
+    "Europe/Amsterdam": { lat: 52.3676, lng: 4.9041, name: "Amsterdam" },
+    "Europe/Brussels": { lat: 50.8503, lng: 4.3517, name: "Brussels" },
+    "Europe/Vienna": { lat: 48.2082, lng: 16.3738, name: "Vienna" },
+    "Europe/Stockholm": { lat: 59.3293, lng: 18.0686, name: "Stockholm" },
+    "Europe/Oslo": { lat: 59.9139, lng: 10.7522, name: "Oslo" },
+    "Europe/Moscow": { lat: 55.7558, lng: 37.6173, name: "Moscow" },
+
+    // East Asia
+    "Asia/Tokyo": { lat: 35.6762, lng: 139.6503, name: "Tokyo" },
 
     // Americas
-    "America/New_York": { lat: 40.7128, lng: -74.0060, name: "New York", method: "ISNA", tz: -5 },
-    "America/Detroit": { lat: 42.3314, lng: -83.0458, name: "Detroit", method: "ISNA", tz: -5 },
-    "America/Chicago": { lat: 41.8781, lng: -87.6298, name: "Chicago", method: "ISNA", tz: -6 },
-    "America/Toronto": { lat: 43.6532, lng: -79.3832, name: "Toronto", method: "ISNA", tz: -5 },
-    "America/Montreal": { lat: 45.5017, lng: -73.5673, name: "Montreal", method: "ISNA", tz: -5 },
-    "America/Los_Angeles": { lat: 34.0522, lng: -118.2437, name: "Los Angeles", method: "ISNA", tz: -8 },
-    "America/Denver": { lat: 39.7392, lng: -104.9903, name: "Denver", method: "ISNA", tz: -7 },
-    "America/Phoenix": { lat: 33.4484, lng: -112.0740, name: "Phoenix", method: "ISNA", tz: -7 },
-    "America/Houston": { lat: 29.7604, lng: -95.3698, name: "Houston", method: "ISNA", tz: -6 },
-    "America/Vancouver": { lat: 49.2827, lng: -123.1207, name: "Vancouver", method: "ISNA", tz: -8 },
+    "America/New_York": { lat: 40.7128, lng: -74.0060, name: "New York" },
+    "America/Detroit": { lat: 42.3314, lng: -83.0458, name: "Detroit" },
+    "America/Chicago": { lat: 41.8781, lng: -87.6298, name: "Chicago" },
+    "America/Toronto": { lat: 43.6532, lng: -79.3832, name: "Toronto" },
+    "America/Montreal": { lat: 45.5017, lng: -73.5673, name: "Montreal" },
+    "America/Los_Angeles": { lat: 34.0522, lng: -118.2437, name: "Los Angeles" },
+    "America/Denver": { lat: 39.7392, lng: -104.9903, name: "Denver" },
+    "America/Phoenix": { lat: 33.4484, lng: -112.0740, name: "Phoenix" },
+    "America/Houston": { lat: 29.7604, lng: -95.3698, name: "Houston" },
+    "America/Vancouver": { lat: 49.2827, lng: -123.1207, name: "Vancouver" },
 
     // Australia & NZ
-    "Australia/Sydney": { lat: -33.8688, lng: 151.2093, name: "Sydney", method: "MWL", tz: 10 },
-    "Australia/Melbourne": { lat: -37.8136, lng: 144.9631, name: "Melbourne", method: "MWL", tz: 10 },
-    "Pacific/Auckland": { lat: -36.8485, lng: 174.7633, name: "Auckland", method: "MWL", tz: 12 }
+    "Australia/Sydney": { lat: -33.8688, lng: 151.2093, name: "Sydney" },
+    "Australia/Melbourne": { lat: -37.8136, lng: 144.9631, name: "Melbourne" },
+    "Pacific/Auckland": { lat: -36.8485, lng: 174.7633, name: "Auckland" }
   };
 
-  // Determine timezone offset in hours for given coordinates
-  function determineTimezoneOffset(lat, lng) {
-    var numLat = parseFloat(lat);
-    var numLng = parseFloat(lng);
-    var localOffset = -new Date().getTimezoneOffset() / 60;
-
-    for (var i = 0; i < FAMOUS_CITIES.length; i++) {
-      var c = FAMOUS_CITIES[i];
-      if (Math.abs(c.lat - numLat) < 0.35 && Math.abs(c.lng - numLng) < 0.35 && c.tz !== undefined) {
-        return c.tz;
-      }
-    }
-
-    for (var tz in TIMEZONE_LOCATIONS) {
-      var loc = TIMEZONE_LOCATIONS[tz];
-      if (Math.abs(loc.lat - numLat) < 0.35 && Math.abs(loc.lng - numLng) < 0.35 && loc.tz !== undefined) {
-        return loc.tz;
-      }
-    }
-
-    var approxGeoOffset = Math.round(numLng / 15);
-    if (Math.abs(localOffset - approxGeoOffset) <= 2) {
-      return localOffset;
-    }
-    return approxGeoOffset;
-  }
-
   function findDefaultLocationForLocal() {
-    var localOffset = -new Date().getTimezoneOffset() / 60;
     var tz = "UTC";
     try {
       tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -362,12 +385,6 @@
 
     if (TIMEZONE_LOCATIONS[tz]) {
       return TIMEZONE_LOCATIONS[tz];
-    }
-
-    for (var i = 0; i < FAMOUS_CITIES.length; i++) {
-      if (FAMOUS_CITIES[i].tz === localOffset) {
-        return FAMOUS_CITIES[i];
-      }
     }
     return null;
   }
@@ -420,7 +437,6 @@
           inputLat.value = localMatch.lat;
           inputLng.value = localMatch.lng;
           if (locationCityName) locationCityName.textContent = localMatch.name;
-          if (localMatch.method && calcMethodSelect) calcMethodSelect.value = localMatch.method;
           autoSaveSettings("Location adapted to local area ✓");
           return;
         }
@@ -429,7 +445,6 @@
 
     if (settings.latitude !== undefined) inputLat.value = settings.latitude;
     if (settings.longitude !== undefined) inputLng.value = settings.longitude;
-    if (settings.calculationMethod && calcMethodSelect) calcMethodSelect.value = settings.calculationMethod;
     if (settings.enabled !== undefined) lockscreenToggle.checked = settings.enabled;
 
     // Location display
@@ -444,7 +459,7 @@
     }
 
     // Sound settings
-    var soundEnabled = settings.soundEnabled !== false; // default true
+    var soundEnabled = settings.soundEnabled !== false;
     var volume = settings.soundVolume !== undefined ? settings.soundVolume : 80;
     soundToggle.checked = soundEnabled;
     volumeSlider.value = volume;
@@ -458,32 +473,33 @@
     var lat = parseFloat(inputLat.value) || 21.4225;
     var lng = parseFloat(inputLng.value) || 39.8262;
     var locName = locationCityName ? locationCityName.textContent.trim() : "Mecca";
-    var method = (calcMethodSelect && calcMethodSelect.value) ? calcMethodSelect.value : "MWL";
-    var tz = determineTimezoneOffset(lat, lng);
 
     var settings = {
       latitude: lat,
       longitude: lng,
       locationName: locName,
-      calculationMethod: method,
-      timezoneOffset: tz,
       enabled: lockscreenToggle.checked,
       soundEnabled: soundToggle.checked,
       soundVolume: parseInt(volumeSlider.value, 10),
       setupComplete: true
     };
 
+    showStatus("Fetching prayer times...", false);
+
     chrome.runtime.sendMessage({
       type: "updateSettings",
       settings: settings
     }, function (response) {
-      if (chrome.runtime.lastError) {
-        showStatus("Error saving", true);
+      if (chrome.runtime.lastError || (response && response.error)) {
+        showStatus("Error updating timings", true);
         return;
       }
-      showStatus(customStatus || "Saved ✓");
-      // Immediately reload prayer times so user sees accurate updated times
-      loadPrayerTimes();
+      showStatus(customStatus || "Saved ✓", false);
+      if (response && response.prayerTimes) {
+        displayPrayerTimes(response.prayerTimes, response.nextPrayer);
+      } else {
+        loadPrayerTimes();
+      }
     });
   }
 
@@ -525,7 +541,7 @@
     // 3. Online geocoding with OpenStreetMap Nominatim
     try {
       var controller = new AbortController();
-      var timeoutId = setTimeout(function () { controller.abort(); }, 3000);
+      var timeoutId = setTimeout(function () { controller.abort(); }, 3500);
       var url = "https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=" + encodeURIComponent(query.trim());
       var res = await fetch(url, {
         signal: controller.signal,
@@ -544,38 +560,15 @@
           if (stateName && stateName !== cityName) displayName += ", " + stateName;
           if (countryName) displayName += ", " + countryName;
 
-          var cLower = countryName.toLowerCase();
-          var method = "MWL";
           var itemLat = parseFloat(item.lat);
           var itemLng = parseFloat(item.lon);
-          var tz = determineTimezoneOffset(itemLat, itemLng);
-
-          if (cLower.includes("malaysia")) {
-            method = "JAKIM"; tz = 8;
-          } else if (cLower.includes("singapore")) {
-            method = "Singapore"; tz = 8;
-          } else if (cLower.includes("saudi")) {
-            method = "Makkah"; tz = 3;
-          } else if (cLower.includes("egypt")) {
-            method = "Egypt"; tz = 2;
-          } else if (cLower.includes("emirates") || cLower.includes("uae")) {
-            method = "Dubai"; tz = 4;
-          } else if (cLower.includes("turkey") || cLower.includes("türkiye")) {
-            method = "Diyanet"; tz = 3;
-          } else if (cLower.includes("pakistan") || cLower.includes("india") || cLower.includes("bangladesh")) {
-            method = "Karachi";
-          } else if (cLower.includes("united states") || cLower.includes("canada")) {
-            method = "ISNA";
-          }
 
           if (!seen.has(displayName)) {
             seen.add(displayName);
             results.push({
               name: displayName,
               lat: itemLat,
-              lng: itemLng,
-              tz: tz,
-              method: method
+              lng: itemLng
             });
           }
         }
@@ -604,16 +597,12 @@
       div.dataset.lat = item.lat;
       div.dataset.lng = item.lng;
       div.dataset.name = item.name;
-      if (item.method) div.dataset.method = item.method;
-      if (item.tz !== undefined) div.dataset.tz = item.tz;
 
       div.addEventListener("click", function () {
         selectCity({
           name: this.dataset.name,
           lat: parseFloat(this.dataset.lat),
-          lng: parseFloat(this.dataset.lng),
-          method: this.dataset.method,
-          tz: this.dataset.tz !== undefined ? parseFloat(this.dataset.tz) : undefined
+          lng: parseFloat(this.dataset.lng)
         });
       });
 
@@ -625,16 +614,13 @@
     if (locationCityName) locationCityName.textContent = city.name;
     inputLat.value = city.lat.toFixed(4);
     inputLng.value = city.lng.toFixed(4);
-    if (city.method && calcMethodSelect) {
-      calcMethodSelect.value = city.method;
-    }
     if (citySearchContainer) citySearchContainer.hidden = true;
     if (citySearchResults) {
       citySearchResults.hidden = true;
       citySearchResults.innerHTML = "";
     }
-    // Automatically save new location & refresh prayer times immediately
-    autoSaveSettings("Location changed & saved: " + city.name + " ✓");
+    // Automatically save new location & immediately fetch fresh timings and reschedule alarms
+    autoSaveSettings("Location changed: " + city.name + " ✓");
   }
 
   // --- Sound helpers ---
@@ -694,13 +680,6 @@
       playPreview(parseInt(volumeSlider.value, 10));
     });
 
-    // Calculation method change - auto saves & refreshes prayer times immediately
-    if (calcMethodSelect) {
-      calcMethodSelect.addEventListener("change", function () {
-        autoSaveSettings("Calculation method updated & saved ✓");
-      });
-    }
-
     // Lock screen toggle - auto saves
     if (lockscreenToggle) {
       lockscreenToggle.addEventListener("change", function () {
@@ -724,22 +703,10 @@
         if (res.ok) {
           var data = await res.json();
           if (data.latitude && data.longitude) {
-            var country = (data.country_name || "").toLowerCase();
-            var detMethod = "MWL";
-            if (country.includes("malaysia")) detMethod = "JAKIM";
-            else if (country.includes("singapore")) detMethod = "Singapore";
-            else if (country.includes("saudi")) detMethod = "Makkah";
-            else if (country.includes("egypt")) detMethod = "Egypt";
-            else if (country.includes("emirates") || country.includes("uae")) detMethod = "Dubai";
-            else if (country.includes("turkey") || country.includes("türkiye")) detMethod = "Diyanet";
-            else if (country.includes("pakistan") || country.includes("india") || country.includes("bangladesh")) detMethod = "Karachi";
-            else if (country.includes("united states") || country.includes("canada")) detMethod = "ISNA";
-
             detected = {
               lat: parseFloat(data.latitude).toFixed(4),
               lng: parseFloat(data.longitude).toFixed(4),
-              name: (data.city || "") + (data.city && data.country_name ? ", " : "") + (data.country_name || ""),
-              method: detMethod
+              name: (data.city || "") + (data.city && data.country_name ? ", " : "") + (data.country_name || "")
             };
           }
         }
@@ -753,22 +720,10 @@
           if (res2.ok) {
             var data2 = await res2.json();
             if (data2.latitude && data2.longitude) {
-              var country2 = (data2.countryName || "").toLowerCase();
-              var detMethod2 = "MWL";
-              if (country2.includes("malaysia")) detMethod2 = "JAKIM";
-              else if (country2.includes("singapore")) detMethod2 = "Singapore";
-              else if (country2.includes("saudi")) detMethod2 = "Makkah";
-              else if (country2.includes("egypt")) detMethod2 = "Egypt";
-              else if (country2.includes("emirates") || country2.includes("uae")) detMethod2 = "Dubai";
-              else if (country2.includes("turkey") || country2.includes("türkiye")) detMethod2 = "Diyanet";
-              else if (country2.includes("pakistan") || country2.includes("india") || country2.includes("bangladesh")) detMethod2 = "Karachi";
-              else if (country2.includes("united states") || country2.includes("canada")) detMethod2 = "ISNA";
-
               detected = {
                 lat: parseFloat(data2.latitude).toFixed(4),
                 lng: parseFloat(data2.longitude).toFixed(4),
-                name: (data2.cityName || "") + (data2.cityName && data2.countryName ? ", " : "") + (data2.countryName || ""),
-                method: detMethod2
+                name: (data2.cityName || "") + (data2.cityName && data2.countryName ? ", " : "") + (data2.countryName || "")
               };
             }
           }
@@ -789,11 +744,9 @@
           detected = {
             lat: match.lat.toFixed(4),
             lng: match.lng.toFixed(4),
-            name: match.name,
-            method: match.method
+            name: match.name
           };
         } else {
-          // Approximate by timezone offset
           var offsetHours = -new Date().getTimezoneOffset() / 60;
           var approxLng = (offsetHours * 15).toFixed(4);
           detected = {
@@ -810,15 +763,12 @@
       if (detected.name && locationCityName) {
         locationCityName.textContent = detected.name;
       }
-      if (detected.method && calcMethodSelect) {
-        calcMethodSelect.value = detected.method;
-      }
 
       detectLocationBtn.disabled = false;
       detectLocationBtn.innerHTML = '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v4M10 14v4M2 10h4M14 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Detect location';
 
-      // Automatically save detected location and immediately recalculate prayer times!
-      autoSaveSettings("Location detected & saved: " + (detected.name || "Coordinates set") + " ✓");
+      // Automatically save detected location, fetch fresh times from Aladhan API, and reschedule alarms!
+      autoSaveSettings("Location detected: " + (detected.name || "Coordinates set") + " ✓");
     });
 
     // Toggle manual coordinates accordion
@@ -907,7 +857,6 @@
           }
         }
 
-        // Safety fallback: ensure popup closes even if background takes time
         setTimeout(closePopupSafely, 2000);
 
         function sendTest(tabId) {
@@ -918,8 +867,7 @@
               tabId: tabId,
               soundEnabled: soundToggle.checked,
               soundVolume: parseInt(volumeSlider.value, 10)
-            }, function (response) {
-              // Wait briefly for content script injection/DOM attachment to complete
+            }, function () {
               setTimeout(closePopupSafely, 200);
             });
           } catch (e) {

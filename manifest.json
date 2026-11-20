@@ -11,7 +11,11 @@
     "notifications",
     "scripting"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "https://api.aladhan.com/*",
+    "https://nominatim.openstreetmap.org/*",
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },

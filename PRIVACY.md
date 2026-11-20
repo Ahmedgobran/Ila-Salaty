@@ -9,11 +9,11 @@
 ## 1. Data Collection & Usage
 
 - **Location Data (Latitude & Longitude)**:
-  - When you click "Detect Location" or manually enter your coordinates, your latitude and longitude are used **exclusively on your device** by the internal astronomical algorithm to calculate local Islamic prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha).
+  - When you click "Detect Location" or manually enter your coordinates, your latitude and longitude are used to retrieve official local Islamic prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) via the public Aladhan API, which are then cached locally on your device.
   - Your geographic coordinates are **never** transmitted to any server owned or operated by Ila Salaty.
   - If you use the online "Detect Location" feature, a query is sent to standard public IP geolocation providers (`ipapi.co` / `freeipapi.com`) solely to determine your approximate city coordinates. No personal identity is linked or stored.
 - **User Settings & Preferences**:
-  - Your chosen calculation method, lock duration, and enabled/disabled states are stored purely in your browser's local extension storage (`chrome.storage.local`).
+  - Your location preferences, lock duration, and enabled/disabled states are stored purely in your browser's local extension storage (`chrome.storage.local`).
 
 ---
 

@@ -1,11 +1,11 @@
 /**
  * Ila Salaty — Background Service Worker
  * 
- * The brain of the extension. Manages prayer time calculation,
+ * The brain of the extension. Manages prayer time retrieval from Aladhan API,
  * alarm scheduling, and coordination between all extension components.
  */
 
-// Import the prayer times calculation engine
+// Import the prayer times API and scheduling service
 importScripts('prayer-times.js');
 
 // ─── Default Settings ────────────────────────────────────────────────
@@ -14,43 +14,43 @@ function getDefaultSettings() {
   let lat = 21.4225;
   let lng = 39.8262;
   let locName = 'Mecca';
-  let method = 'Makkah';
   let tz = 3;
 
   if (tzOffsetHours === 8) {
-    lat = 3.0738; lng = 101.5183; locName = 'Shah Alam / Kuala Lumpur (UTC+8)'; method = 'JAKIM'; tz = 8;
+    lat = 3.0738; lng = 101.5183; locName = 'Shah Alam / Kuala Lumpur (UTC+8)'; tz = 8;
   } else if (tzOffsetHours === 7) {
-    lat = -6.2088; lng = 106.8456; locName = 'Jakarta (UTC+7)'; method = 'MWL'; tz = 7;
+    lat = -6.2088; lng = 106.8456; locName = 'Jakarta (UTC+7)'; tz = 7;
   } else if (tzOffsetHours === 5.5) {
-    lat = 28.6139; lng = 77.2090; locName = 'New Delhi (UTC+5:30)'; method = 'Karachi'; tz = 5.5;
+    lat = 28.6139; lng = 77.2090; locName = 'New Delhi (UTC+5:30)'; tz = 5.5;
   } else if (tzOffsetHours === 5) {
-    lat = 24.8607; lng = 67.0011; locName = 'Karachi (UTC+5)'; method = 'Karachi'; tz = 5;
+    lat = 24.8607; lng = 67.0011; locName = 'Karachi (UTC+5)'; tz = 5;
   } else if (tzOffsetHours === 6) {
-    lat = 23.8103; lng = 90.4125; locName = 'Dhaka (UTC+6)'; method = 'Karachi'; tz = 6;
+    lat = 23.8103; lng = 90.4125; locName = 'Dhaka (UTC+6)'; tz = 6;
   } else if (tzOffsetHours === 4) {
-    lat = 25.2048; lng = 55.2708; locName = 'Dubai (UTC+4)'; method = 'Dubai'; tz = 4;
+    lat = 25.2048; lng = 55.2708; locName = 'Dubai (UTC+4)'; tz = 4;
   } else if (tzOffsetHours === 3) {
-    lat = 21.4225; lng = 39.8262; locName = 'Mecca (UTC+3)'; method = 'Makkah'; tz = 3;
+    lat = 21.4225; lng = 39.8262; locName = 'Mecca (UTC+3)'; tz = 3;
   } else if (tzOffsetHours === 2) {
-    lat = 30.0444; lng = 31.2357; locName = 'Cairo (UTC+2)'; method = 'Egypt'; tz = 2;
+    lat = 30.0444; lng = 31.2357; locName = 'Cairo (UTC+2)'; tz = 2;
   } else if (tzOffsetHours === 1) {
-    lat = 48.8566; lng = 2.3522; locName = 'Paris (UTC+1)'; method = 'MWL'; tz = 1;
+    lat = 48.8566; lng = 2.3522; locName = 'Paris (UTC+1)'; tz = 1;
   } else if (tzOffsetHours === 0) {
-    lat = 51.5074; lng = -0.1278; locName = 'London / Casablanca (UTC+0)'; method = 'MWL'; tz = 0;
+    lat = 51.5074; lng = -0.1278; locName = 'London / Casablanca (UTC+0)'; tz = 0;
   } else if (tzOffsetHours === -5) {
-    lat = 40.7128; lng = -74.0060; locName = 'New York (UTC-5)'; method = 'ISNA'; tz = -5;
+    lat = 40.7128; lng = -74.0060; locName = 'New York (UTC-5)'; tz = -5;
   } else if (tzOffsetHours === -8) {
-    lat = 34.0522; lng = -118.2437; locName = 'Los Angeles (UTC-8)'; method = 'ISNA'; tz = -8;
+    lat = 34.0522; lng = -118.2437; locName = 'Los Angeles (UTC-8)'; tz = -8;
   }
 
   return {
     latitude: lat,
     longitude: lng,
-    calculationMethod: method,
     timezoneOffset: tz,
     enabled: true,
     locationName: locName,
     lockDurationMinutes: 5,
+    soundEnabled: true,
+    soundVolume: 80,
     setupComplete: false
   };
 }
@@ -77,14 +77,19 @@ function inOrder(work) {
   return result;
 }
 
-function scheduleFor(day, config) {
-  const times = calculatePrayerTimes(day, config.latitude, config.longitude, config.calculationMethod, config.timezoneOffset);
+async function scheduleFor(day, config) {
+  const times = await getPrayerTimes(config.latitude, config.longitude, day);
   const events = [];
   for (const name of PRAYER_NAMES) {
-    if (!times[name].valid) continue;
+    if (!times[name] || !times[name].valid) continue;
     const date = new Date(day);
     date.setHours(times[name].hour, times[name].minute, 0, 0);
-    events.push({ name, when: date.getTime(), key: name + '-' + date.toDateString() });
+    const when = date.getTime();
+    events.push({
+      name,
+      when,
+      key: `${name}-${date.toDateString()}`
+    });
   }
   return { times, events };
 }
@@ -105,11 +110,24 @@ async function reconcile(resetBaseline = false) {
 
   const now = new Date();
   const nowMs = now.getTime();
-  const today = scheduleFor(now, config);
+  let today;
+  try {
+    today = await scheduleFor(now, config);
+  } catch (e) {
+    console.error('[Ila Salaty] Failed to schedule for today:', e);
+    if (state.todaysPrayerTimes) {
+      today = { times: state.todaysPrayerTimes, events: [] };
+    } else {
+      return;
+    }
+  }
+
   if (resetBaseline || !state.todaysPrayerTimes || state.scheduleTimezone !== now.getTimezoneOffset()
       || new Date(state.lastCalculated).toDateString() !== now.toDateString()) {
     await chrome.storage.local.set({
-      todaysPrayerTimes: today.times, lastCalculated: now.toISOString(), scheduleTimezone: now.getTimezoneOffset()
+      todaysPrayerTimes: today.times,
+      lastCalculated: now.toISOString(),
+      scheduleTimezone: now.getTimezoneOffset()
     });
   }
 
@@ -118,7 +136,15 @@ async function reconcile(resetBaseline = false) {
     await chrome.alarms.create('health-check', { periodInMinutes: 1 });
   }
   if (alarms.has('daily-recalc')) await chrome.alarms.clear('daily-recalc');
-  const upcoming = today.events.concat(scheduleFor(onDay(now, 1), config).events);
+
+  let upcoming = today.events;
+  try {
+    const tomorrow = await scheduleFor(onDay(now, 1), config);
+    upcoming = upcoming.concat(tomorrow.events);
+  } catch (e) {
+    console.warn('[Ila Salaty] Could not fetch tomorrow events:', e);
+  }
+
   for (const name of PRAYER_NAMES) {
     const id = 'prayer-' + name;
     const next = config.enabled && upcoming.find(event => event.name === name && event.when > nowMs);
@@ -132,13 +158,17 @@ async function reconcile(resetBaseline = false) {
   // A fresh installation or a new schedule starts tracking from now.
   let since = nowMs;
   if (!resetBaseline) {
-    // v1.0.0 had no checkpoint. Preserve its short catch-up window on upgrade.
     const baseline = state.lastCalculated ? nowMs - 15 * 60000 : nowMs;
     since = state.lastPrayerCheck ?? baseline;
   }
   let events = today.events;
   if (new Date(since).toDateString() !== now.toDateString()) {
-    events = events.concat(scheduleFor(onDay(now, -1), config).events);
+    try {
+      const yesterday = await scheduleFor(onDay(now, -1), config);
+      events = events.concat(yesterday.events);
+    } catch (e) {
+      console.warn('[Ila Salaty] Could not fetch yesterday events:', e);
+    }
   }
   const due = events.filter(event => event.when > since && event.when <= nowMs)
     .sort((a, b) => b.when - a.when)[0];
@@ -173,7 +203,6 @@ function isRestrictedUrl(url) {
  */
 async function getActiveTabSafe() {
   try {
-    // In Edge & Chrome, lastFocusedWindow gets the actual browser window the user was interacting with
     let tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tabs || tabs.length === 0) {
       tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -223,7 +252,8 @@ async function ensureTabLocked(tab, reminder) {
 const lockPage = chrome.runtime.getURL('lockscreen.html');
 async function openStandalone(tab, reminder) {
   const params = new URLSearchParams({
-    prayerKey: reminder.prayerKey, lockDuration: reminder.lockDuration,
+    prayerKey: reminder.prayerKey,
+    lockDuration: reminder.lockDuration,
     triggeredAt: reminder.triggeredAt,
     sound: reminder.soundEnabled !== false ? 'true' : 'false',
     volume: reminder.soundVolume !== undefined ? reminder.soundVolume : '80',
@@ -241,7 +271,9 @@ async function openStandalone(tab, reminder) {
 
 async function present(name, config, occurrence, tabId) {
   const reminder = {
-    prayerKey: name, prayer: PRAYERS[name], lockDuration: config.lockDurationMinutes || 5,
+    prayerKey: name,
+    prayer: PRAYERS[name],
+    lockDuration: config.lockDurationMinutes || 5,
     triggeredAt: Date.now(),
     soundEnabled: config.soundEnabled !== false,
     soundVolume: typeof config.soundVolume === 'number' ? config.soundVolume : 80
@@ -249,10 +281,12 @@ async function present(name, config, occurrence, tabId) {
   await chrome.storage.local.set({ activeReminder: reminder });
   // Desktop notification permissions and fullscreen presentation are independent.
   chrome.notifications.create(NOTIFICATION_ID, {
-    type: 'basic', iconUrl: 'icons/icon128.png',
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
     title: `🕌 ${reminder.prayer.en} Prayer Time — حان وقت صلاة ${reminder.prayer.ar}`,
     message: 'It is time to pray. Leave what you are doing and respond to the call.',
-    priority: 2, requireInteraction: true
+    priority: 2,
+    requireInteraction: true
   }).catch(error => console.warn('[Ila Salaty] Notification:', error.message));
 
   const tab = (tabId != null && await chrome.tabs.get(tabId).catch(() => null)) || await getActiveTabSafe();
@@ -290,7 +324,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       case 'updateSettings': {
         await chrome.storage.local.set({ settings: message.settings });
         await reconcile(true);
-        return { success: true };
+        const { todaysPrayerTimes } = await chrome.storage.local.get('todaysPrayerTimes');
+        return { success: true, prayerTimes: todaysPrayerTimes, nextPrayer: getNextPrayer(todaysPrayerTimes) };
       }
       case 'dismissLockscreen': {
         const { activeReminder } = await chrome.storage.local.get('activeReminder');

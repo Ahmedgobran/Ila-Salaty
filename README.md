@@ -15,12 +15,8 @@ Rather than displaying an ordinary notification, Ila Salaty provides a dedicated
 - **Media Autopause:** Automatically pauses supported audio and video playback when the reminder appears.
 - **5-Minute Countdown:** Provides a visual countdown to encourage users to take a break and pray.
 - **Thoughtful Dismissal:** The option to dismiss the reminder is initially delayed. Leaving early requires confirmation through a simple prompt asking whether you have prayed.
-- **Prayer Time Calculation:** Supports several widely used calculation methods:
-  - Muslim World League (MWL)
-  - Umm Al-Qura University
-  - Egyptian General Authority of Survey
-  - Islamic Society of North America (ISNA)
-  - University of Islamic Sciences, Karachi
+- **Accurate Worldwide Prayer Timings:** Powered by the industry-standard Aladhan Prayer Times API, automatically resolving official regional prayer authority timings based on your coordinates.
+- **Local Storage Caching:** Prayer times are cached daily in local storage for fast performance and reliable offline operation.
 - **Automatic Location Detection:** Estimates your location using IP-based geolocation without requiring a browser location permission prompt.
 - **Islamic-Inspired Design:** Features a carefully designed interface with Arabic typography, subtle geometric patterns, and prayer-related Quranic verses and Hadith reminders.
 
@@ -62,7 +58,7 @@ Enable the **Developer mode** toggle in the top-right corner.
 1. Open the Extensions menu in your browser.
 2. Pin **Ila Salaty (إلا صلاتي)** to your toolbar.
 3. Open the extension and navigate to **Settings (الإعدادات)**.
-4. Configure your location and preferred prayer time calculation method.
+4. Configure your location (search city, auto-detect, or enter coordinates).
 
 ---
 
