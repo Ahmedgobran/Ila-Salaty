@@ -32,15 +32,41 @@
 
 html {
   font-size: 15px;
+  background-color: var(--bg-midnight);
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 
 body {
   width: 360px;
+  min-height: 100vh;
   font-family: 'Amiri', 'Traditional Arabic', serif;
   background: linear-gradient(175deg, var(--bg-deep) 0%, var(--bg-midnight) 100%);
+  background-color: var(--bg-midnight);
+  background-attachment: fixed;
   color: var(--text-primary);
   overflow-x: hidden;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* --- Custom Scrollbar --- */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-midnight);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 168, 67, 0.25);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 168, 67, 0.45);
 }
 
 /* --- Header --- */
