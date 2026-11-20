@@ -41,7 +41,8 @@
       "resources": [
         "lockscreen.html",
         "lockscreen.css",
-        "lockscreen.js"
+        "lockscreen.js",
+        "adhan.mp3"
       ],
       "matches": ["<all_urls>"]
     }

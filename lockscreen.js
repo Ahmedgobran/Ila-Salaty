@@ -200,4 +200,34 @@
     window.parent.postMessage({ type: 'LOCKSCREEN_READY' }, '*');
   }
 
+  // ─── Adhan Sound ────────────────────────────────────────────────────
+  // Play the adhan notification sound if enabled in settings.
+  // The settings are read directly from storage for reliability across
+  // both the iframe overlay and standalone tab modes.
+  (function playAdhanIfEnabled() {
+    try {
+      chrome.storage.local.get('settings', function (data) {
+        var settings = data.settings || {};
+        // soundEnabled defaults to true if not set
+        if (settings.soundEnabled === false) return;
+        var volume = typeof settings.soundVolume === 'number' ? settings.soundVolume : 80;
+        var audio = new Audio(chrome.runtime.getURL('adhan.mp3'));
+        audio.volume = Math.min(1, Math.max(0, volume / 100));
+        // Some browsers require a user gesture before playing audio.
+        // The lockscreen was opened due to user browsing, so autoplay
+        // is generally permitted inside extension pages and iframes.
+        var playPromise = audio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(function () {
+            // Autoplay blocked (e.g. very first page load with no user gesture).
+            // This is non-fatal — the visual lock screen still displays.
+            console.log('[Ila Salaty] Adhan autoplay blocked by browser policy');
+          });
+        }
+      });
+    } catch (e) {
+      // Extension context may be unavailable in standalone tab edge cases.
+    }
+  })();
+
 })();

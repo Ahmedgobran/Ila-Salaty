@@ -18,6 +18,11 @@
   const detectLocationBtn = document.getElementById("detectLocation");
   const calcMethodSelect = document.getElementById("calcMethod");
   const lockscreenToggle = document.getElementById("lockscreenToggle");
+  const soundToggle = document.getElementById("soundToggle");
+  const volumeSlider = document.getElementById("volumeSlider");
+  const volumeLabel = document.getElementById("volumeLabel");
+  const volumeGroup = document.getElementById("volumeGroup");
+  const previewSoundBtn = document.getElementById("previewSound");
   const saveBtn = document.getElementById("saveSettings");
   const saveStatus = document.getElementById("saveStatus");
 
@@ -196,6 +201,15 @@
     if (settings.longitude !== undefined) inputLng.value = settings.longitude;
     if (settings.calculationMethod) calcMethodSelect.value = settings.calculationMethod;
     if (settings.enabled !== undefined) lockscreenToggle.checked = settings.enabled;
+
+    // Sound settings
+    var soundEnabled = settings.soundEnabled !== false; // default true
+    var volume = settings.soundVolume !== undefined ? settings.soundVolume : 80;
+    soundToggle.checked = soundEnabled;
+    volumeSlider.value = volume;
+    volumeLabel.textContent = volume + "%";
+    updateVolumeSliderFill(volume);
+    volumeGroup.classList.toggle("disabled", !soundEnabled);
   }
 
   // --- Comprehensive Timezone Coordinates Map ---
@@ -267,6 +281,23 @@
     "Pacific/Auckland": { lat: -36.8485, lng: 174.7633, name: "Auckland", method: "MWL" }
   };
 
+  // --- Sound helpers ---
+  function updateVolumeSliderFill(val) {
+    volumeSlider.style.setProperty("--vol", val + "%");
+  }
+
+  var previewAudio = null;
+
+  function playPreview(vol) {
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio.currentTime = 0;
+    }
+    previewAudio = new Audio(chrome.runtime.getURL("adhan.mp3"));
+    previewAudio.volume = vol / 100;
+    previewAudio.play().catch(function () {});
+  }
+
   // --- Event Listeners ---
   function setupEventListeners() {
     // Toggle settings panel
@@ -278,6 +309,23 @@
       } else {
         settingsPanel.hidden = false;
       }
+    });
+
+    // Sound toggle
+    soundToggle.addEventListener("change", function () {
+      volumeGroup.classList.toggle("disabled", !soundToggle.checked);
+    });
+
+    // Volume slider live feedback
+    volumeSlider.addEventListener("input", function () {
+      var val = parseInt(volumeSlider.value, 10);
+      volumeLabel.textContent = val + "%";
+      updateVolumeSliderFill(val);
+    });
+
+    // Preview button
+    previewSoundBtn.addEventListener("click", function () {
+      playPreview(parseInt(volumeSlider.value, 10));
     });
 
     // Detect location seamlessly without permission blocks
@@ -416,7 +464,9 @@
         latitude: parseFloat(inputLat.value) || 21.4225,
         longitude: parseFloat(inputLng.value) || 39.8262,
         calculationMethod: calcMethodSelect.value,
-        enabled: lockscreenToggle.checked
+        enabled: lockscreenToggle.checked,
+        soundEnabled: soundToggle.checked,
+        soundVolume: parseInt(volumeSlider.value, 10)
       };
 
       saveBtn.disabled = true;
