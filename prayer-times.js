@@ -17,6 +17,18 @@ const CALCULATION_METHODS = {
     ishaAngle: 17,
     ishaMinutes: null
   },
+  JAKIM: {
+    name: 'Jabatan Kemajuan Islam Malaysia (JAKIM)',
+    fajrAngle: 18,
+    ishaAngle: 18,
+    ishaMinutes: null
+  },
+  Singapore: {
+    name: 'Majlis Ugama Islam Singapura (MUIS)',
+    fajrAngle: 20,
+    ishaAngle: 18,
+    ishaMinutes: null
+  },
   ISNA: {
     name: 'Islamic Society of North America',
     fajrAngle: 15,
@@ -39,6 +51,18 @@ const CALCULATION_METHODS = {
     name: 'University of Islamic Sciences, Karachi',
     fajrAngle: 18,
     ishaAngle: 18,
+    ishaMinutes: null
+  },
+  Dubai: {
+    name: 'Dubai (UAE)',
+    fajrAngle: 18.2,
+    ishaAngle: 18.2,
+    ishaMinutes: null
+  },
+  Diyanet: {
+    name: 'Presidency of Religious Affairs, Turkey',
+    fajrAngle: 18,
+    ishaAngle: 17,
     ishaMinutes: null
   }
 };
@@ -120,7 +144,9 @@ function sunPosition(jd) {
   const RA = arctan2Deg(cosDeg(e) * sinDeg(L), cosDeg(L)) / 15; // Right ascension in hours
 
   const declination = arcsinDeg(sinDeg(e) * sinDeg(L));
-  const equationOfTime = q / 15 - fixHour(RA);
+  let equationOfTime = q / 15 - fixHour(RA);
+  while (equationOfTime > 12) equationOfTime -= 24;
+  while (equationOfTime < -12) equationOfTime += 24;
 
   return { declination, equationOfTime };
 }
@@ -145,14 +171,26 @@ function hourAngle(latitude, declination, angle) {
  * @param {Date} date - The date to calculate for
  * @param {number} latitude - Geographic latitude
  * @param {number} longitude - Geographic longitude
- * @param {string} method - Calculation method key (MWL, ISNA, Egypt, Makkah, Karachi)
+ * @param {string} method - Calculation method key (MWL, JAKIM, Singapore, ISNA, Egypt, Makkah, Karachi, Dubai, Diyanet)
+ * @param {number} [timezone] - Optional timezone offset in hours (e.g. 8 for UTC+8, 3 for UTC+3)
  * @returns {object} Prayer times object
  */
-function calculatePrayerTimes(date, latitude, longitude, method = 'MWL') {
+function calculatePrayerTimes(date, latitude, longitude, method = 'MWL', timezone = null) {
   const methodParams = CALCULATION_METHODS[method] || CALCULATION_METHODS.MWL;
 
-  // Get timezone offset in hours
-  const timezoneOffset = -date.getTimezoneOffset() / 60;
+  // Determine timezone offset in hours
+  let timezoneOffset;
+  if (typeof timezone === 'number' && !isNaN(timezone)) {
+    timezoneOffset = timezone;
+  } else {
+    const localOffset = -date.getTimezoneOffset() / 60;
+    const approxGeoOffset = Math.round(longitude / 15);
+    if (Math.abs(localOffset - approxGeoOffset) <= 2) {
+      timezoneOffset = localOffset;
+    } else {
+      timezoneOffset = approxGeoOffset;
+    }
+  }
 
   // Julian date for the given date at noon
   const jd = julianDate(date.getFullYear(), date.getMonth() + 1, date.getDate());

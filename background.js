@@ -14,38 +14,40 @@ function getDefaultSettings() {
   let lat = 21.4225;
   let lng = 39.8262;
   let locName = 'Mecca';
-  let method = 'MWL';
+  let method = 'Makkah';
+  let tz = 3;
 
   if (tzOffsetHours === 8) {
-    lat = 3.1390; lng = 101.6869; locName = 'Kuala Lumpur / Singapore (UTC+8)'; method = 'MWL';
+    lat = 3.0738; lng = 101.5183; locName = 'Shah Alam / Kuala Lumpur (UTC+8)'; method = 'JAKIM'; tz = 8;
   } else if (tzOffsetHours === 7) {
-    lat = -6.2088; lng = 106.8456; locName = 'Jakarta (UTC+7)'; method = 'MWL';
+    lat = -6.2088; lng = 106.8456; locName = 'Jakarta (UTC+7)'; method = 'MWL'; tz = 7;
   } else if (tzOffsetHours === 5.5) {
-    lat = 28.6139; lng = 77.2090; locName = 'New Delhi (UTC+5:30)'; method = 'Karachi';
+    lat = 28.6139; lng = 77.2090; locName = 'New Delhi (UTC+5:30)'; method = 'Karachi'; tz = 5.5;
   } else if (tzOffsetHours === 5) {
-    lat = 24.8607; lng = 67.0011; locName = 'Karachi (UTC+5)'; method = 'Karachi';
+    lat = 24.8607; lng = 67.0011; locName = 'Karachi (UTC+5)'; method = 'Karachi'; tz = 5;
   } else if (tzOffsetHours === 6) {
-    lat = 23.8103; lng = 90.4125; locName = 'Dhaka (UTC+6)'; method = 'Karachi';
+    lat = 23.8103; lng = 90.4125; locName = 'Dhaka (UTC+6)'; method = 'Karachi'; tz = 6;
   } else if (tzOffsetHours === 4) {
-    lat = 25.2048; lng = 55.2708; locName = 'Dubai (UTC+4)'; method = 'MWL';
+    lat = 25.2048; lng = 55.2708; locName = 'Dubai (UTC+4)'; method = 'Dubai'; tz = 4;
   } else if (tzOffsetHours === 3) {
-    lat = 21.4225; lng = 39.8262; locName = 'Mecca (UTC+3)'; method = 'Makkah';
+    lat = 21.4225; lng = 39.8262; locName = 'Mecca (UTC+3)'; method = 'Makkah'; tz = 3;
   } else if (tzOffsetHours === 2) {
-    lat = 30.0444; lng = 31.2357; locName = 'Cairo (UTC+2)'; method = 'Egypt';
+    lat = 30.0444; lng = 31.2357; locName = 'Cairo (UTC+2)'; method = 'Egypt'; tz = 2;
   } else if (tzOffsetHours === 1) {
-    lat = 48.8566; lng = 2.3522; locName = 'Paris (UTC+1)'; method = 'MWL';
+    lat = 48.8566; lng = 2.3522; locName = 'Paris (UTC+1)'; method = 'MWL'; tz = 1;
   } else if (tzOffsetHours === 0) {
-    lat = 51.5074; lng = -0.1278; locName = 'London / Casablanca (UTC+0)'; method = 'MWL';
+    lat = 51.5074; lng = -0.1278; locName = 'London / Casablanca (UTC+0)'; method = 'MWL'; tz = 0;
   } else if (tzOffsetHours === -5) {
-    lat = 40.7128; lng = -74.0060; locName = 'New York (UTC-5)'; method = 'ISNA';
+    lat = 40.7128; lng = -74.0060; locName = 'New York (UTC-5)'; method = 'ISNA'; tz = -5;
   } else if (tzOffsetHours === -8) {
-    lat = 34.0522; lng = -118.2437; locName = 'Los Angeles (UTC-8)'; method = 'ISNA';
+    lat = 34.0522; lng = -118.2437; locName = 'Los Angeles (UTC-8)'; method = 'ISNA'; tz = -8;
   }
 
   return {
     latitude: lat,
     longitude: lng,
     calculationMethod: method,
+    timezoneOffset: tz,
     enabled: true,
     locationName: locName,
     lockDurationMinutes: 5,
@@ -76,7 +78,7 @@ function inOrder(work) {
 }
 
 function scheduleFor(day, config) {
-  const times = calculatePrayerTimes(day, config.latitude, config.longitude, config.calculationMethod);
+  const times = calculatePrayerTimes(day, config.latitude, config.longitude, config.calculationMethod, config.timezoneOffset);
   const events = [];
   for (const name of PRAYER_NAMES) {
     if (!times[name].valid) continue;
