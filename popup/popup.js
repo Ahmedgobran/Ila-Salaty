@@ -209,7 +209,7 @@
     volumeSlider.value = volume;
     volumeLabel.textContent = volume + "%";
     updateVolumeSliderFill(volume);
-    volumeGroup.classList.toggle("disabled", !soundEnabled);
+    volumeGroup.hidden = !soundEnabled;
   }
 
   // --- Comprehensive Timezone Coordinates Map ---
@@ -313,7 +313,11 @@
 
     // Sound toggle
     soundToggle.addEventListener("change", function () {
-      volumeGroup.classList.toggle("disabled", !soundToggle.checked);
+      volumeGroup.hidden = !soundToggle.checked;
+      if (!soundToggle.checked && previewAudio) {
+        previewAudio.pause();
+        previewAudio.currentTime = 0;
+      }
     });
 
     // Volume slider live feedback
@@ -435,7 +439,9 @@
             chrome.runtime.sendMessage({
               type: "testLockscreen",
               prayerKey: "dhuhr",
-              tabId: tabId
+              tabId: tabId,
+              soundEnabled: soundToggle.checked,
+              soundVolume: parseInt(volumeSlider.value, 10)
             }, function (response) {
               // Wait briefly for content script injection/DOM attachment to complete
               setTimeout(closePopupSafely, 200);

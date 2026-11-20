@@ -222,7 +222,10 @@ const lockPage = chrome.runtime.getURL('lockscreen.html');
 async function openStandalone(tab, reminder) {
   const params = new URLSearchParams({
     prayerKey: reminder.prayerKey, lockDuration: reminder.lockDuration,
-    triggeredAt: reminder.triggeredAt, standalone: true
+    triggeredAt: reminder.triggeredAt,
+    sound: reminder.soundEnabled !== false ? 'true' : 'false',
+    volume: reminder.soundVolume !== undefined ? reminder.soundVolume : '80',
+    standalone: true
   });
   const url = lockPage + '?' + params;
   const existing = (await chrome.tabs.query({})).find(t =>
@@ -237,7 +240,9 @@ async function openStandalone(tab, reminder) {
 async function present(name, config, occurrence, tabId) {
   const reminder = {
     prayerKey: name, prayer: PRAYERS[name], lockDuration: config.lockDurationMinutes || 5,
-    triggeredAt: Date.now()
+    triggeredAt: Date.now(),
+    soundEnabled: config.soundEnabled !== false,
+    soundVolume: typeof config.soundVolume === 'number' ? config.soundVolume : 80
   };
   await chrome.storage.local.set({ activeReminder: reminder });
   // Desktop notification permissions and fullscreen presentation are independent.
@@ -292,8 +297,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       }
       case 'testLockscreen': {
         const { settings } = await chrome.storage.local.get('settings');
+        const activeConfig = Object.assign({}, settings || DEFAULT_SETTINGS);
+        if (message.soundEnabled !== undefined) activeConfig.soundEnabled = message.soundEnabled;
+        if (message.soundVolume !== undefined) activeConfig.soundVolume = message.soundVolume;
         await present(message.prayerKey in PRAYERS ? message.prayerKey : 'dhuhr',
-          settings || DEFAULT_SETTINGS, null, message.tabId);
+          activeConfig, null, message.tabId);
         return { success: true };
       }
       default: return { error: 'Unknown message type' };

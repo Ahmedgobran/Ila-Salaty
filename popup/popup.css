@@ -413,6 +413,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  direction: ltr !important;
 }
 
 .settings__volume {
@@ -424,6 +425,7 @@ body {
   background: linear-gradient(to right, var(--teal-light) 0%, var(--teal-light) var(--vol, 80%), rgba(245,240,225,0.15) var(--vol, 80%));
   outline: none;
   cursor: pointer;
+  direction: ltr !important;
 }
 
 .settings__volume::-webkit-slider-thumb {
@@ -474,11 +476,6 @@ body {
   transform: scale(1.1);
 }
 
-#volumeGroup {
-  transition: opacity 0.2s ease;
-}
-
-#volumeGroup.disabled {
-  opacity: 0.35;
-  pointer-events: none;
+#volumeGroup[hidden] {
+  display: none !important;
 }

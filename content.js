@@ -41,9 +41,13 @@
     const frame = document.createElement('iframe');
     frame.className = 'ila-salaty-iframe';
     frame.title = reminder.prayer.en + ' prayer reminder';
+    frame.setAttribute('allow', 'autoplay');
     const params = new URLSearchParams({
-      prayerKey: reminder.prayerKey, lockDuration: reminder.lockDuration,
-      triggeredAt: reminder.triggeredAt
+      prayerKey: reminder.prayerKey,
+      lockDuration: reminder.lockDuration,
+      triggeredAt: reminder.triggeredAt,
+      sound: reminder.soundEnabled !== false ? 'true' : 'false',
+      volume: reminder.soundVolume !== undefined ? reminder.soundVolume : '80'
     });
     frame.src = chrome.runtime.getURL('lockscreen.html') + '?' + params;
 
