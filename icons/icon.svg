@@ -1,51 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
-    <style>
-      .dome { fill: #0D7377; }
-    </style>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E5254"/>
+      <stop offset="50%" stop-color="#0A3D3F"/>
+      <stop offset="100%" stop-color="#071E2F"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F0D48A"/>
+      <stop offset="100%" stop-color="#D4A843"/>
+    </linearGradient>
   </defs>
-  <!-- Main dome -->
-  <path class="dome" d="
-    M36 72
-    Q36 40 64 28
-    Q92 40 92 72
-    L92 78
-    L36 78
-    Z
-  "/>
-  <!-- Base / walls -->
-  <rect class="dome" x="30" y="78" width="68" height="18" rx="2"/>
-  <!-- Left minaret -->
-  <rect class="dome" x="18" y="50" width="8" height="46" rx="2"/>
-  <rect class="dome" x="16" y="92" width="12" height="6" rx="1"/>
-  <circle class="dome" cx="22" cy="47" r="5.5"/>
-  <!-- Finial left -->
-  <rect class="dome" x="21" y="38" width="2" height="6"/>
-  <circle class="dome" cx="22" cy="36" r="2"/>
-  <!-- Right minaret -->
-  <rect class="dome" x="102" y="50" width="8" height="46" rx="2"/>
-  <rect class="dome" x="100" y="92" width="12" height="6" rx="1"/>
-  <circle class="dome" cx="106" cy="47" r="5.5"/>
-  <!-- Finial right -->
-  <rect class="dome" x="105" y="38" width="2" height="6"/>
-  <circle class="dome" cx="106" cy="36" r="2"/>
-  <!-- Crescent moon on dome -->
-  <g transform="translate(64, 20)">
-    <!-- Crescent: outer circle minus inner offset circle -->
-    <path class="dome" d="
-      M-1 -8
-      A8 8 0 1 1 -1 8
-      A6.5 6.5 0 1 0 -1 -8
-      Z
-    "/>
+  <!-- Background Rounded Squircle Badge -->
+  <rect x="7" y="7" width="114" height="114" rx="26" fill="url(#bgGrad)" stroke="#D4A843" stroke-width="1.8" stroke-opacity="0.28"/>
+  
+  <g fill="url(#goldGrad)">
+    <!-- Base Plinth -->
+    <rect x="22" y="96" width="84" height="5" rx="2.5" fill="#D4A843"/>
+    
+    <!-- Left Minaret -->
+    <rect x="26" y="44" width="8" height="52" rx="1.2" fill="#D4A843"/>
+    <rect x="22" y="40" width="16" height="4" rx="1.5"/>
+    <rect x="27.5" y="30" width="5" height="10" fill="#D4A843"/>
+    <polygon points="26,30 34,30 30,17"/>
+    <circle cx="30" cy="15.8" r="1.3"/>
+    
+    <!-- Right Minaret -->
+    <rect x="94" y="44" width="8" height="52" rx="1.2" fill="#D4A843"/>
+    <rect x="90" y="40" width="16" height="4" rx="1.5"/>
+    <rect x="95.5" y="30" width="5" height="10" fill="#D4A843"/>
+    <polygon points="94,30 102,30 98,17"/>
+    <circle cx="98" cy="15.8" r="1.3"/>
+    
+    <!-- Main Hall Building with Cutout Arched Doorway -->
+    <path d="M40 96 V63 H88 V96 H72 V80 C72 73.5 64 69 64 69 C64 69 56 73.5 56 80 V96 Z" fill="#D4A843"/>
+    
+    <!-- Central Pointed Ogee Dome -->
+    <path d="M42 63 C39 47 51 35 64 27 C77 35 89 47 86 63 Z"/>
+    
+    <!-- Dome Spire Rod -->
+    <rect x="63.2" y="19" width="1.6" height="8"/>
   </g>
-  <!-- Door arch -->
-  <path fill="#071E2F" d="
-    M56 96
-    L56 82
-    Q56 74 64 74
-    Q72 74 72 82
-    L72 96
-    Z
-  " opacity="0.4"/>
+  
+  <!-- Crescent Moon at Dome Peak -->
+  <path d="M64 8 A7 7 0 1 1 59 19.5 A5.8 5.8 0 1 0 64 8 Z" fill="#F8F4E8"/>
 </svg>
