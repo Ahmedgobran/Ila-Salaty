@@ -164,6 +164,7 @@ body {
 /* --- Next Prayer Countdown --- */
 .next-prayer {
   display: flex;
+  direction: ltr;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
