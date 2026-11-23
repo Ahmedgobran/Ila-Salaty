@@ -620,21 +620,25 @@ body {
   display: none;
 }
 
-.settings__btn--save {
+.settings__btn--test {
   width: 100%;
   justify-content: center;
-  margin-top: 0.4rem;
+  margin-top: 0.6rem;
   padding: 0.55rem 1rem;
-  background: var(--gold);
-  color: var(--earth);
-  border-color: var(--gold);
-  font-weight: 700;
+  background: rgba(13, 115, 119, 0.2);
+  border: 1px solid var(--teal);
+  color: var(--gold);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
 }
 
-.settings__btn--save:hover {
-  background: var(--gold-light);
-  border-color: var(--gold-light);
-  color: var(--earth);
+.settings__btn--test:hover {
+  background: rgba(13, 115, 119, 0.4);
+  border-color: var(--teal-light);
+  color: var(--gold-light);
 }
 
 .settings__status {

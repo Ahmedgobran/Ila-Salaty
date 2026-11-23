@@ -31,7 +31,6 @@
   const volumeLabel = document.getElementById("volumeLabel");
   const volumeGroup = document.getElementById("volumeGroup");
   const previewSoundBtn = document.getElementById("previewSound");
-  const saveBtn = document.getElementById("saveSettings");
   const saveStatus = document.getElementById("saveStatus");
 
   const prayerTimeEls = {
@@ -887,11 +886,6 @@
         });
       });
     }
-
-    // Manual Save button as well
-    saveBtn.addEventListener("click", function () {
-      autoSaveSettings("Settings saved ✓");
-    });
   }
 
   // --- Status message ---
